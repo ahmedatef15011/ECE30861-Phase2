@@ -538,7 +538,7 @@ def create_app() -> FastAPI:
     class ArtifactMetadata(BaseModel):
         """Artifact metadata response."""
         name: str
-        id: int
+        id: str  # String per OpenAPI spec pattern ^[a-zA-Z0-9\-]+$
         type: str
 
     @app.post(
@@ -583,7 +583,7 @@ def create_app() -> FastAPI:
                     results.append(
                         ArtifactMetadata(
                             name=pkg.name,
-                            id=pkg.id,
+                            id=str(pkg.id),  # Convert to string
                             type=artifact_type
                         )
                     )
@@ -623,7 +623,7 @@ def create_app() -> FastAPI:
                     results.append(
                         ArtifactMetadata(
                             name=pkg.name,
-                            id=pkg.id,
+                            id=str(pkg.id),  # Convert to string
                             type=artifact_type
                         )
                     )
@@ -689,7 +689,7 @@ def create_app() -> FastAPI:
                 results.append(
                     ArtifactMetadata(
                         name=pkg.name,
-                        id=pkg.id,
+                        id=str(pkg.id),  # Convert to string
                         type=artifact_type
                     )
                 )
@@ -880,6 +880,7 @@ def create_app() -> FastAPI:
                 code_quality=scores.get("code_quality", 0.0),
                 reproducibility=scores.get("reproducibility", 0.0),
                 reviewedness=scores.get("reviewedness", 0.0),
+                treescore=scores.get("treescore", 0.0),  # Add tree_score
                 net_score=scores.get("net_score", 0.0)
             )
         
@@ -914,7 +915,7 @@ def create_app() -> FastAPI:
         result = [
             ArtifactMetadata(
                 name=p.name,
-                id=str(p.id),
+                id=str(p.id),  # Already string
                 type="model"
             )
             for p in packages
@@ -942,7 +943,7 @@ def create_app() -> FastAPI:
         result = [
             ArtifactMetadata(
                 name=p.name,
-                id=str(p.id),
+                id=str(p.id),  # Already string
                 type="code"
             )
             for p in packages
@@ -970,7 +971,7 @@ def create_app() -> FastAPI:
         result = [
             ArtifactMetadata(
                 name=p.name,
-                id=str(p.id),
+                id=str(p.id),  # Already string
                 type="dataset"
             )
             for p in packages
@@ -989,17 +990,17 @@ def create_app() -> FastAPI:
         db: Session = Depends(get_db),
     ):
         """
-        Get ratings/scores for a model artifact.
+        Get ratings/scores for a model artifact (BASELINE).
         
         Per OpenAPI spec: Returns ModelRating with all quality metrics.
-        This is separate from the ingest endpoint.
+        All field names must match spec exactly (snake_case).
         
         Args:
             id: Artifact ID
             db: Database session
             
         Returns:
-            ModelRating with all scores
+            ModelRating with all scores per spec format
         """
         from fastapi import HTTPException
         
@@ -1027,54 +1028,113 @@ def create_app() -> FastAPI:
                 detail=f"No ratings found for artifact {id}"
             )
         
-        # Return rating response
+        # Determine category from artifact type or use generic "model"
+        category = getattr(package, 'artifact_type', 'model')
+        
+        # Calculate latencies in seconds (convert from ms if available)
+        latency_seconds = (
+            scores.scoring_latency_ms / 1000.0
+            if scores.scoring_latency_ms
+            else 0.0
+        )
+        
+        # For now, use same latency for all metrics (could track separately)
+        individual_latency = latency_seconds / 11.0 if latency_seconds > 0 else 0.0
+        
+        # Build size_score object with 4 platform scores
+        # We need to calculate these from size_score metric
+        # For now, estimate based on overall size_score
+        overall_size = scores.size_score if scores.size_score is not None else 0.5
+        
+        # Estimate platform-specific scores (smaller devices = lower scores)
+        # This is a simplified model - ideally calculated by SizeScoreMetric
+        size_score_obj = {
+            "raspberry_pi": max(0.0, overall_size - 0.3),  # Smallest device
+            "jetson_nano": max(0.0, overall_size - 0.15),  # Small GPU device
+            "desktop_pc": overall_size,  # Match overall score
+            "aws_server": min(1.0, overall_size + 0.1)  # Largest deployment
+        }
+        
+        # Return ModelRating per OpenAPI spec (lines 1063-1216)
         return {
-            "BusFactor": (
-                scores.bus_factor if scores.bus_factor is not None else 0.0
+            # Required metadata fields
+            "name": package.name,
+            "category": category,
+            
+            # Net score (overall)
+            "net_score": (
+                scores.net_score if scores.net_score is not None else 0.0
             ),
-            "BusFactorLatency": 0.0,  # Not tracked separately
-            "Correctness": (
-                scores.code_quality if scores.code_quality is not None else 0.0
-            ),
-            "CorrectnessLatency": 0.0,
-            "RampUp": (
+            "net_score_latency": latency_seconds,
+            
+            # Phase 1 metrics (8 metrics)
+            "ramp_up_time": (
                 scores.ramp_up_time if scores.ramp_up_time is not None else 0.0
             ),
-            "RampUpLatency": 0.0,
-            "ResponsiveMaintainer": (
+            "ramp_up_time_latency": individual_latency,
+            
+            "bus_factor": (
+                scores.bus_factor if scores.bus_factor is not None else 0.0
+            ),
+            "bus_factor_latency": individual_latency,
+            
+            "performance_claims": (
                 scores.performance_claims
                 if scores.performance_claims is not None
                 else 0.0
             ),
-            "ResponsiveMaintainerLatency": 0.0,
-            "LicenseScore": (
+            "performance_claims_latency": individual_latency,
+            
+            "license": (
                 scores.license_score
                 if scores.license_score is not None
                 else 0.0
             ),
-            "LicenseScoreLatency": 0.0,
-            "GoodPinningPractice": (
+            "license_latency": individual_latency,
+            
+            "dataset_and_code_score": (
+                scores.dataset_code_linkage
+                if scores.dataset_code_linkage is not None
+                else 0.0
+            ),
+            "dataset_and_code_score_latency": individual_latency,
+            
+            "dataset_quality": (
                 scores.dataset_quality
                 if scores.dataset_quality is not None
                 else 0.0
             ),
-            "GoodPinningPracticeLatency": 0.0,
-            "PullRequest": (
-                scores.reviewedness
-                if scores.reviewedness is not None
-                else 0.0
+            "dataset_quality_latency": individual_latency,
+            
+            "code_quality": (
+                scores.code_quality if scores.code_quality is not None else 0.0
             ),
-            "PullRequestLatency": 0.0,
-            "NetScore": (
-                scores.net_score if scores.net_score is not None else 0.0
-            ),
-            "NetScoreLatency": 0.0,
-            "Reproducibility": (
+            "code_quality_latency": individual_latency,
+            
+            "size_score": size_score_obj,  # Object with 4 platform scores
+            "size_score_latency": individual_latency,
+            
+            # Phase 2 metrics (3 additional)
+            "reproducibility": (
                 scores.reproducibility
                 if scores.reproducibility is not None
                 else 0.0
             ),
-            "ReproducibilityLatency": 0.0,
+            "reproducibility_latency": individual_latency,
+            
+            "reviewedness": (
+                scores.reviewedness
+                if scores.reviewedness is not None
+                else 0.0
+            ),
+            "reviewedness_latency": individual_latency,
+            
+            "tree_score": (
+                scores.treescore
+                if scores.treescore is not None
+                else 0.0
+            ),
+            "tree_score_latency": individual_latency,
         }
     
     # Get artifact by name endpoint (NON-BASELINE per spec)
@@ -1134,7 +1194,7 @@ def create_app() -> FastAPI:
             results.append(
                 ArtifactMetadata(
                     name=pkg.name,
-                    id=pkg.id,
+                    id=str(pkg.id),  # Convert to string
                     type=artifact_type
                 )
             )
@@ -1238,7 +1298,7 @@ def create_app() -> FastAPI:
         return Artifact(
             metadata=ArtifactMetadata(
                 name=package.name,
-                id=package.id,
+                id=str(package.id),  # Convert to string
                 type=pkg_artifact_type
             ),
             data=ArtifactData(
