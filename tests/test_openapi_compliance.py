@@ -153,7 +153,7 @@ def test_authentication_token_format(client):
                 "is_admin": True
             },
             "secret": {
-                "password": "correcthorsebatterystaple123(!__+@**(A'\"`;DROP TABLE artifacts;"
+                "password": "correcthorsebatterystaple123(!__+@**(A'\"`;DROP TABLE packages;"
             }
         }
     )
