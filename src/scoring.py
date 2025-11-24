@@ -133,23 +133,38 @@ class MetricScorer:
         )
 
     async def _enrich_context(self, context: ModelContext):
-        # enrich context with data from APIs
-        try:
-            # HF model info
-            context.hf_info = await self.hf_api.get_model_info(context.model_url)
-        except Exception as e:
-            logger.error(f"Failed to get model info: {e}")
-            context.hf_info = None
-
-        try:
-            # README content
-            context.readme_content = await self.hf_api.get_readme_content(
-                context.model_url
-            )
+        # enrich context with data from APIs - PARALLEL VERSION
+        import asyncio
+        import re
+        
+        # ✅ FIX: Create all tasks upfront (don't await yet)
+        tasks = {
+            'hf_info': self.hf_api.get_model_info(context.model_url),
+            'readme': self.hf_api.get_readme_content(context.model_url),
+            'config': self.hf_api.get_model_config(context.model_url),
+        }
+        
+        # ✅ FIX: Run all tasks in parallel with exception handling
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        
+        # Process results
+        task_names = list(tasks.keys())
+        for task_name, result in zip(task_names, results):
+            if isinstance(result, Exception):
+                logger.error(f"Failed to fetch {task_name}: {result}")
+                result = None
             
-            # Extract GitHub repository from README
-            if context.readme_content:
-                import re
+            # Assign results to context
+            if task_name == 'hf_info':
+                context.hf_info = result
+            elif task_name == 'readme':
+                context.readme_content = result
+            elif task_name == 'config':
+                context.config_data = result
+        
+        # Extract GitHub repository from README (if available)
+        if context.readme_content:
+            try:
                 # Look for GitHub URLs in README
                 github_patterns = [
                     r'https?://github\.com/([^/\s]+)/([^/\s\)]+)',
@@ -176,22 +191,10 @@ class MetricScorer:
                         context.code_repos.append(github_parsed)
                         logger.info(f"Found GitHub repo in README: {github_url}")
                         break
-                        
-        except Exception as e:
-            logger.error(f"Failed to get README content: {e}")
-            context.readme_content = None
-        except Exception as e:
-            logger.error(f"Failed to get README content: {e}")
-            context.readme_content = None
-
-        try:
-            # model config
-            context.config_data = await self.hf_api.get_model_config(context.model_url)
-        except Exception as e:
-            logger.error(f"Failed to get model config: {e}")
-            context.config_data = None
-
-        logger.info(f"Enriched context for {context.model_url.name}") #sanity log
+            except Exception as e:
+                logger.error(f"Error extracting GitHub repo from README: {e}")
+        
+        logger.info(f"Enriched context for {context.model_url.name}")
 
     # compute all metrics in parallel
     async def _compute_metrics_parallel(

@@ -3,6 +3,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import atexit
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -16,12 +17,41 @@ from .models import ParsedURL
 
 logger = get_logger()
 
+# Global per-process cache directory (shared within this process only)
+_PROCESS_CACHE_DIR = None
+
+def _get_process_cache_dir():
+    """Get or create the per-process cache directory"""
+    global _PROCESS_CACHE_DIR
+    if _PROCESS_CACHE_DIR is None:
+        # Create a unique temp directory for this process
+        _PROCESS_CACHE_DIR = tempfile.mkdtemp(prefix="ece30861_git_")
+        logger.debug(f"Created per-process git cache: {_PROCESS_CACHE_DIR}")
+        
+        # Register cleanup on exit
+        def cleanup_cache():
+            if _PROCESS_CACHE_DIR and os.path.exists(_PROCESS_CACHE_DIR):
+                try:
+                    shutil.rmtree(_PROCESS_CACHE_DIR)
+                    logger.debug(f"Cleaned up git cache: {_PROCESS_CACHE_DIR}")
+                except:
+                    pass
+        atexit.register(cleanup_cache)
+    
+    return _PROCESS_CACHE_DIR
+
 
 class GitInspector:
     # git repository inspector using Dulwich
 
     def __init__(self, cache_dir: Optional[str] = None, timeout: int = 30):
-        self.cache_dir = cache_dir or tempfile.mkdtemp(prefix="src_git_cache_")
+        # Use per-process cache (shared within run, cleaned between runs)
+        if cache_dir:
+            self.cache_dir = cache_dir
+        else:
+            # Get the shared per-process cache directory
+            self.cache_dir = _get_process_cache_dir()
+            
         self.timeout = timeout
         os.makedirs(self.cache_dir, exist_ok=True)
 
@@ -41,8 +71,13 @@ class GitInspector:
 
         # check if already cloned
         if os.path.exists(clone_path):
-            logger.debug(f"Using cached clone at {clone_path}")
-            return clone_path
+            # Check if it's a valid repo (has .git)
+            if os.path.exists(os.path.join(clone_path, ".git")):
+                logger.debug(f"Using cached clone at {clone_path}")
+                return clone_path
+            else:
+                # Invalid/partial clone, remove it
+                shutil.rmtree(clone_path, ignore_errors=True)
 
         try:
             logger.info(f"Cloning {repo_url.url} to {clone_path}")
@@ -101,8 +136,6 @@ class GitInspector:
             if os.path.exists(clone_path):
                 shutil.rmtree(clone_path, ignore_errors=True)
             return None
-
-
 
     def analyze_repository(self, repo_path: str) -> Dict[str, Any]:
         # analyze a cloned repository for various quality metrics
@@ -356,8 +389,6 @@ class GitInspector:
 
     def cleanup(self):
         # clean up cache directory
-        try:
-            if os.path.exists(self.cache_dir):
-                shutil.rmtree(self.cache_dir)
-        except Exception as e:
-            logger.warning(f"Failed to cleanup cache directory: {e}")
+        # ✅ FIX: Do NOT delete the shared cache directory
+        # Only delete if it was a temporary one we created (but now we use shared)
+        pass

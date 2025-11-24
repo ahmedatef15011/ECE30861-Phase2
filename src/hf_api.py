@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from typing import Any, Dict, Optional
@@ -31,7 +32,11 @@ class HuggingFaceAPI:
                 if model_url.owner
                 else model_url.repo
             )
-            model_info = self.api.model_info(repo_id, token=self.token)
+            
+            # ✅ FIX: Run blocking API call in thread pool
+            model_info = await asyncio.to_thread(
+                self.api.model_info, repo_id, token=self.token
+            )
 
             # convert to dict and add additional metrics
             info_dict = {
@@ -90,9 +95,11 @@ class HuggingFaceAPI:
                 # Ignore errors in tag processing
                 pass
 
-            # get file information
+            # ✅ FIX: Get file information in thread pool
             try:
-                files = list_repo_files(repo_id, token=self.token)
+                files = await asyncio.to_thread(
+                    list_repo_files, repo_id, token=self.token
+                )
                 info_dict["files"] = files
                 info_dict["file_count"] = len(files)
             except Exception as e:
@@ -122,7 +129,11 @@ class HuggingFaceAPI:
                 if dataset_url.owner
                 else dataset_url.repo
             )
-            dataset_info = self.api.dataset_info(repo_id, token=self.token)
+            
+            # ✅ FIX: Run blocking API call in thread pool
+            dataset_info = await asyncio.to_thread(
+                self.api.dataset_info, repo_id, token=self.token
+            )
 
             return {
                 "id": dataset_info.id,
@@ -144,17 +155,21 @@ class HuggingFaceAPI:
     ) -> Optional[str]:
         # download a specific file from a repository
         try:
-            file_path = hf_hub_download(
+            # ✅ FIX: Download file in thread pool
+            file_path = await asyncio.to_thread(
+                hf_hub_download,
                 repo_id=repo_id,
                 filename=filename,
                 repo_type="dataset" if is_dataset else "model",
                 token=self.token,
             )
 
-            # Read file content
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+            # ✅ FIX: Read file content in thread pool
+            def read_file():
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read()
 
+            content = await asyncio.to_thread(read_file)
             return content
 
         except Exception as e:
@@ -176,10 +191,18 @@ class HuggingFaceAPI:
         # try different README file names
         readme_files = ["README.md", "readme.md", "README.txt", "readme.txt"]
 
-        for readme_file in readme_files:
-            content = await self.download_file(repo_id, readme_file, is_dataset)
-            if content:
-                return content
+        # ✅ OPTIMIZATION: Try all README files in parallel
+        tasks = [
+            self.download_file(repo_id, readme_file, is_dataset)
+            for readme_file in readme_files
+        ]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Return first successful result
+        for result in results:
+            if result and not isinstance(result, Exception):
+                return result
 
         return None
 
@@ -193,13 +216,20 @@ class HuggingFaceAPI:
         )
 
         config_files = ["config.json", "model_index.json", "tokenizer.json"]
-        config_data = {}
 
-        for config_file in config_files:
-            content = await self.download_file(repo_id, config_file, False)
-            if content:
+        # ✅ OPTIMIZATION: Download all config files in parallel
+        tasks = [
+            self.download_file(repo_id, config_file, False)
+            for config_file in config_files
+        ]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        config_data = {}
+        for config_file, result in zip(config_files, results):
+            if result and not isinstance(result, Exception):
                 try:
-                    config_data[config_file] = json.loads(content)
+                    config_data[config_file] = json.loads(result)
                 except json.JSONDecodeError:
                     logger.debug(f"Could not parse JSON from {config_file}")
 
