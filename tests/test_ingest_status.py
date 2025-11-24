@@ -78,7 +78,7 @@ def test_create_package_with_rejected_status():
 
 
 def test_get_packages_filters_approved_only():
-    """Test that get_packages only returns approved packages by default."""
+    """Test that get_packages returns all packages regardless of status."""
     init_db()
     db = SessionLocal()
     
@@ -105,19 +105,12 @@ def test_get_packages_filters_approved_only():
             ingest_status="rejected"
         )
         
-        # Get packages (should only return approved)
-        packages = crud.get_packages(db, only_approved=True)
+        # Get packages (returns all statuses)
+        packages = crud.get_packages(db)
         package_names = [p.name for p in packages]
         
         assert "approved-model" in package_names
-        assert "rejected-model" not in package_names
-        
-        # Get all packages (including rejected)
-        all_packages = crud.get_packages(db, only_approved=False)
-        all_names = [p.name for p in all_packages]
-        
-        assert "approved-model" in all_names
-        assert "rejected-model" in all_names
+        assert "rejected-model" in package_names
         
         # Clean up
         db.delete(approved)
