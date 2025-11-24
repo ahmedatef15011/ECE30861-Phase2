@@ -596,8 +596,7 @@ def create_app() -> FastAPI:
                         db.query(Package)
                         .filter(
                             Package.name == query.name,
-                            Package.artifact_type.in_(query.types),
-                            Package.ingest_status == "approved"  # Only approved
+                            Package.artifact_type.in_(query.types)
                         )
                         .all()
                     )
@@ -605,8 +604,7 @@ def create_app() -> FastAPI:
                     packages = (
                         db.query(Package)
                         .filter(
-                            Package.name == query.name,
-                            Package.ingest_status == "approved"  # Only approved
+                            Package.name == query.name
                         )
                         .all()
                     )              
