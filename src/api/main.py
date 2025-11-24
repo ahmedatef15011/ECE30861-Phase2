@@ -538,12 +538,11 @@ def create_app() -> FastAPI:
     class ArtifactMetadata(BaseModel):
         """Artifact metadata response."""
         name: str
-        id: str  # String per OpenAPI spec pattern ^[a-zA-Z0-9\-]+$
+        id: int  # Integer per OpenAPI spec
         type: str
 
     @app.post(
         "/artifacts",
-        response_model=list[ArtifactMetadata],
         tags=["artifacts"]
     )
     def query_artifacts(
@@ -563,9 +562,11 @@ def create_app() -> FastAPI:
             db: Database session
             
         Returns:
-            List of matching artifact metadata
+            List of matching artifact metadata with offset header
         """
         from src.database.models import Package
+        from fastapi.responses import JSONResponse
+        
         logger.info(f"📋 POST /artifacts: Processing {len(queries)} query(ies)")
         for i, q in enumerate(queries, 1):
             logger.info(f"   Query {i}: name='{q.name}', types={q.types}")
@@ -583,7 +584,7 @@ def create_app() -> FastAPI:
                     results.append(
                         ArtifactMetadata(
                             name=pkg.name,
-                            id=str(pkg.id),  # Convert to string
+                            id=pkg.id,  # Integer, not string
                             type=artifact_type
                         )
                     )
@@ -635,7 +636,7 @@ def create_app() -> FastAPI:
                     results.append(
                         ArtifactMetadata(
                             name=pkg.name,
-                            id=str(pkg.id),  # Convert to string
+                            id=pkg.id,  # Integer, not string
                             type=artifact_type
                         )
                     )
@@ -643,7 +644,24 @@ def create_app() -> FastAPI:
         logger.info(
             f"📦 POST /artifacts: Returning {len(results)} total"
         )
-        return results
+        
+        # Build response with offset header per OpenAPI spec
+        response = JSONResponse(
+            content=[
+                {
+                    "name": r.name,
+                    "id": r.id,
+                    "type": r.type
+                }
+                for r in results
+            ]
+        )
+        
+        # Add offset header for pagination
+        next_offset = str(int(offset or 0) + len(results))
+        response.headers["offset"] = next_offset
+        
+        return response
     
     # Regex search endpoint (OpenAPI spec - BASELINE)
     class ArtifactRegEx(BaseModel):
