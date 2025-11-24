@@ -1227,10 +1227,9 @@ def create_app() -> FastAPI:
         # Note: OpenAPI spec says X-Authorization is required,
         # but we handle it optionally for testing purposes
         
-        # Search for packages with this exact name (approved only)
+        # Search for packages with this exact name (all statuses - for transparency)
         packages = db.query(Package).filter(
-            Package.name == name,
-            Package.ingest_status == "approved"
+            Package.name == name
         ).all()
         
         logger.info(f"   Found {len(packages)} package(s) with name '{name}'")
