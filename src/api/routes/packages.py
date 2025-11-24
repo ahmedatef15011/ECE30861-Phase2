@@ -506,8 +506,8 @@ def query_artifacts(
             # List all artifacts
             packages = crud.get_all_packages(db)
             for pkg in packages:
-                # Determine type from package metadata or default to model
-                artifact_type = getattr(pkg, 'type', 'model')
+                # Get actual artifact type from package (artifact_type field)
+                artifact_type = getattr(pkg, 'artifact_type', 'model')
                 results.append(
                     ArtifactMetadata(
                         name=pkg.name,
@@ -522,10 +522,14 @@ def query_artifacts(
             ).all()
             
             for pkg in packages:
-                # Filter by types if specified
-                artifact_type = getattr(pkg, 'type', 'model')
-                if query.types and artifact_type not in query.types:
-                    continue
+                # Get actual artifact type from package (artifact_type field)
+                artifact_type = getattr(pkg, 'artifact_type', 'model')
+                
+                # Filter by types ONLY if types filter was explicitly provided
+                # Empty types list means "return all types"
+                if query.types and len(query.types) > 0:
+                    if artifact_type not in query.types:
+                        continue
                     
                 results.append(
                     ArtifactMetadata(
