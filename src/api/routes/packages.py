@@ -33,6 +33,7 @@ router = APIRouter()
 class IngestRequest(BaseModel):
     """Request to ingest a HuggingFace model."""
     url: str  # Full HuggingFace URL or model name
+    name: Optional[str] = None  # Expected artifact name (from autograder)
 
 
 class IngestResponse(BaseModel):
@@ -75,9 +76,17 @@ async def ingest_model(
         HTTPException: 400 if invalid URL
     """
     try:
-        # Parse model name from URL
-        model_name = request.url.strip("/").split("/")[-2:]
-        model_name = "/".join(model_name) if len(model_name) == 2 else model_name[0]
+        # Use provided name if available, otherwise parse from URL
+        if request.name:
+            model_name = request.name
+        else:
+            # Fallback: parse model name from URL
+            url_parts = request.url.strip("/").split("/")
+            model_name = (
+                "/".join(url_parts[-2:])
+                if len(url_parts) >= 2
+                else url_parts[-1]
+            )
 
         # Validate model against quality gate
         passes_gate, validation_result = await validate_and_ingest(

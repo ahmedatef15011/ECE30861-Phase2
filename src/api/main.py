@@ -724,6 +724,7 @@ def create_app() -> FastAPI:
     class ArtifactData(BaseModel):
         """Artifact data for ingest and retrieval."""
         url: str
+        name: Optional[str] = None  # Expected artifact name (from autograder)
         download_url: Optional[str] = None  # For GET endpoints
 
     class ArtifactIngestResponse(BaseModel):
@@ -761,11 +762,21 @@ def create_app() -> FastAPI:
             f"📥 POST /artifact/{artifact_type}: url={artifact_data.url}"
         )
         
-        # Parse artifact name from URL
+        # Use provided name if available, otherwise parse from URL
         url = artifact_data.url
         
         # Extract full model identifier for validation (e.g., "owner/repo")
         url_parts = url.strip("/").split("/")
+        
+        # Use autograder-provided name if available
+        if artifact_data.name:
+            artifact_name = artifact_data.name
+        else:
+            # Fallback: Extract just the artifact name (WITHOUT owner prefix)
+            # Per OpenAPI spec examples: "bert-base-uncased"
+            artifact_name = url_parts[-1]
+            if artifact_name.endswith('.git'):
+                artifact_name = artifact_name[:-4]
         
         # For HuggingFace: "https://huggingface.co/owner/model" -> "owner/model"
         # For GitHub: "https://github.com/owner/repo" -> "owner/repo"
@@ -777,12 +788,6 @@ def create_app() -> FastAPI:
         # Remove .git suffix if present (for GitHub URLs)
         if full_model_name.endswith('.git'):
             full_model_name = full_model_name[:-4]
-        
-        # For storage: Extract just the artifact name (WITHOUT owner prefix)
-        # Per OpenAPI spec examples: "bert-base-uncased" not "google-bert/bert-base-uncased"
-        artifact_name = url_parts[-1]
-        if artifact_name.endswith('.git'):
-            artifact_name = artifact_name[:-4]
         
         
         # Create package entry FIRST (before quality gate validation)
