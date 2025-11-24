@@ -208,8 +208,7 @@ def get_packages(
     skip: int = 0,
     limit: int = 100,
     name_filter: Optional[str] = None,
-    use_regex: bool = False,
-    only_approved: bool = True  # New parameter
+    use_regex: bool = False
 ) -> List[Package]:
     """
     Get all packages with optional filtering and pagination.
@@ -220,16 +219,11 @@ def get_packages(
         limit: Maximum number of records to return
         name_filter: Filter pattern for package name (and README when using regex)
         use_regex: If True, treat name_filter as regex pattern; if False, use SQL LIKE
-        only_approved: If True, only return packages with ingest_status "approved"
     
     Returns:
         List of packages matching the filter
     """
     query = db.query(Package)
-    
-    # Filter by approved status (default)
-    if only_approved:
-        query = query.filter(Package.ingest_status == "approved")
     
     if name_filter:
         if use_regex:
