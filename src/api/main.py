@@ -581,6 +581,9 @@ def create_app() -> FastAPI:
                 logger.info(f"   ✓ Found {len(packages)} total artifact(s)")
                 for pkg in packages:
                     artifact_type = getattr(pkg, 'artifact_type', 'model')
+                    # Filter by types if specified
+                    if query.types and artifact_type not in query.types:
+                        continue
                     results.append(
                         ArtifactMetadata(
                             name=pkg.name,
