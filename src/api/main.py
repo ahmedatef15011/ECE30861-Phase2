@@ -590,12 +590,26 @@ def create_app() -> FastAPI:
             else:
                 # Try exact match first so we do not return substring hits
                 logger.info(f"   🔍 Searching for exact match: '{query.name}'")
-                packages = (
-                    db.query(Package)
-                    .filter(Package.name == query.name)
-                    .all()
-                )
-                
+                # Execute exact match query for this specific artifact
+                if query.types:
+                    packages = (
+                        db.query(Package)
+                        .filter(
+                            Package.name == query.name,
+                            Package.artifact_type.in_(query.types),
+                            Package.ingest_status == "approved"  # Only approved
+                        )
+                        .all()
+                    )
+                else:
+                    packages = (
+                        db.query(Package)
+                        .filter(
+                            Package.name == query.name,
+                            Package.ingest_status == "approved"  # Only approved
+                        )
+                        .all()
+                    )              
                 if packages:
                     logger.info(
                         f"   ✓ Exact match: {len(packages)} package(s)"
@@ -770,51 +784,86 @@ def create_app() -> FastAPI:
         if artifact_name.endswith('.git'):
             artifact_name = artifact_name[:-4]
         
-        # Validate artifact against quality gate (use full name for validation)
-        logger.info(f"   Validating {full_model_name}...")
-        passes_gate, validation_result = await validate_and_ingest(
-            full_model_name
-        )
         
-        if not passes_gate:
-            # Quality gate failed - return 424
-            logger.warning(
-                f"❌ QUALITY GATE FAILED: {artifact_name} - "
-                f"Failing metrics: {validation_result.get('failing_metrics')}"
-            )
-            from fastapi import HTTPException
-            raise HTTPException(
-                status_code=424,
-                detail={
-                    "message": "Artifact disqualified due to ratings",
-                    "failing_metrics": validation_result.get("failing_metrics")  # noqa: E501
-                }
-            )
-        
-        # Quality gate passed - create artifact entry
-        logger.info(f"✅ QUALITY GATE PASSED: {artifact_name}")
+        # Create package entry FIRST (before quality gate validation)
+        # This ensures we track ALL submission attempts
+        logger.info(f"📝 Creating package entry for {artifact_name}...")
         artifact_id = str(uuid.uuid4())
         
-        # Store in database (use artifact_name WITHOUT owner prefix)
         from src.database import crud
         package = crud.create_package(
             db,
             name=artifact_name,
             version="1.0.0",
-            artifact_type=artifact_type,  # Pass the artifact type
+            artifact_type=artifact_type,
             s3_key=artifact_id,
-            s3_bucket="",  # Will be updated if S3 enabled
-            file_size_bytes=0,  # Will be updated if S3 enabled
+            s3_bucket="",
+            file_size_bytes=0,
             source_url=url,
-            uploaded_by=1  # Default admin user
+            uploaded_by=1,  # Default admin user
+            ingest_status="pending"  # Mark as pending evaluation
         )
+        db.commit()
+        db.refresh(package)
         
         logger.info(
-            f"💾 STORED IN DB: id={package.id}, name={artifact_name}, "
-            f"type={artifact_type}"
+            f"💾 PACKAGE CREATED: id={package.id}, name={artifact_name}, "
+            f"type={artifact_type}, status=pending"
         )
         
-        # S3 Upload (if enabled)
+        # Now run quality gate validation
+        logger.info(f"   Validating {full_model_name}...") 
+        passes_gate, validation_result = await validate_and_ingest(
+            full_model_name
+        )
+        
+        if not passes_gate:
+            # Quality gate FAILED - update package status to rejected
+            logger.warning(
+                f"❌ QUALITY GATE FAILED: {artifact_name} - "
+                f"Failing metrics: {validation_result.get('failing_metrics')}"
+            )
+            
+            package.ingest_status = "rejected"
+            package.quality_gate_result = {
+                "passed": False,
+                "evaluated_at": datetime.utcnow().isoformat(),
+                "failing_metrics": validation_result.get("failing_metrics", [])
+            }
+            db.commit()
+            
+            logger.info(
+                f"📊 PACKAGE UPDATED: id={package.id}, status=rejected"
+            )
+            
+            # Still return 424 per OpenAPI spec
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=424,
+                detail={
+                    "message": "Artifact disqualified due to ratings",
+                    "failing_metrics": validation_result.get("failing_metrics")
+                }
+            )
+        
+        # Quality gate PASSED - update package status to approved
+        logger.info(f"✅ QUALITY GATE PASSED: {artifact_name}")
+        
+        package.ingest_status = "approved"
+        package.quality_gate_result = {
+            "passed": True,
+            "evaluated_at": datetime.utcnow().isoformat(),
+            "net_score": validation_result.get("all_scores", {}).get("net_score", 0.0)
+        }
+        db.commit()
+        db.refresh(package)
+        
+        logger.info(
+            f"📊 PACKAGE UPDATED: id={package.id}, status=approved, "
+            f"net_score={package.quality_gate_result.get('net_score', 0.0)}"
+        )
+        
+        # S3 Upload (if enabled) - only for approved artifacts
         enable_s3 = os.getenv(
             "ENABLE_S3_STORAGE",
             "false"
@@ -880,7 +929,7 @@ def create_app() -> FastAPI:
                 code_quality=scores.get("code_quality", 0.0),
                 reproducibility=scores.get("reproducibility", 0.0),
                 reviewedness=scores.get("reviewedness", 0.0),
-                treescore=scores.get("treescore", 0.0),  # Add tree_score
+                treescore=scores.get("treescore", 0.0),
                 net_score=scores.get("net_score", 0.0)
             )
         
@@ -909,7 +958,8 @@ def create_app() -> FastAPI:
         """
         logger.info("🔍 AUTOGRADER: GET all models")
         packages = db.query(Package).filter(
-            Package.artifact_type == "model"
+            Package.artifact_type == "model",
+            Package.ingest_status == "approved"
         ).all()
         
         result = [
@@ -937,7 +987,8 @@ def create_app() -> FastAPI:
         """
         logger.info("🔍 AUTOGRADER: GET all code")
         packages = db.query(Package).filter(
-            Package.artifact_type == "code"
+            Package.artifact_type == "code",
+            Package.ingest_status == "approved"
         ).all()
         
         result = [
@@ -965,7 +1016,8 @@ def create_app() -> FastAPI:
         """
         logger.info("🔍 AUTOGRADER: GET all datasets")
         packages = db.query(Package).filter(
-            Package.artifact_type == "dataset"
+            Package.artifact_type == "dataset",
+            Package.ingest_status == "approved"
         ).all()
         
         result = [
@@ -1175,8 +1227,11 @@ def create_app() -> FastAPI:
         # Note: OpenAPI spec says X-Authorization is required,
         # but we handle it optionally for testing purposes
         
-        # Search for packages with this exact name
-        packages = db.query(Package).filter(Package.name == name).all()
+        # Search for packages with this exact name (approved only)
+        packages = db.query(Package).filter(
+            Package.name == name,
+            Package.ingest_status == "approved"
+        ).all()
         
         logger.info(f"   Found {len(packages)} package(s) with name '{name}'")
         

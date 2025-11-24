@@ -161,7 +161,9 @@ def create_package(
     repository_url: Optional[str] = None,
     uploaded_by: Optional[int] = None,
     is_sensitive: bool = False,
-    access_control_script: Optional[str] = None
+    access_control_script: Optional[str] = None,
+    ingest_status: str = "approved",  # New: "approved", "rejected", "pending"
+    quality_gate_result: Optional[dict] = None  # New: JSON with eval results
 ) -> Package:
     """Create a new package."""
     package = Package(
@@ -179,7 +181,9 @@ def create_package(
         repository_url=repository_url,
         uploaded_by=uploaded_by,
         is_sensitive=is_sensitive,
-        access_control_script=access_control_script
+        access_control_script=access_control_script,
+        ingest_status=ingest_status,
+        quality_gate_result=quality_gate_result
     )
     db.add(package)
     db.commit()
@@ -199,15 +203,16 @@ def get_package_by_name_version(db: Session, name: str, version: str) -> Optiona
     ).first()
 
 
-def list_packages(
+def get_packages(
     db: Session,
     skip: int = 0,
     limit: int = 100,
     name_filter: Optional[str] = None,
-    use_regex: bool = False
+    use_regex: bool = False,
+    only_approved: bool = True  # New parameter
 ) -> List[Package]:
     """
-    List packages with optional filtering and pagination.
+    Get all packages with optional filtering and pagination.
     
     Args:
         db: Database session
@@ -215,11 +220,16 @@ def list_packages(
         limit: Maximum number of records to return
         name_filter: Filter pattern for package name (and README when using regex)
         use_regex: If True, treat name_filter as regex pattern; if False, use SQL LIKE
+        only_approved: If True, only return packages with ingest_status "approved"
     
     Returns:
         List of packages matching the filter
     """
     query = db.query(Package)
+    
+    # Filter by approved status (default)
+    if only_approved:
+        query = query.filter(Package.ingest_status == "approved")
     
     if name_filter:
         if use_regex:
@@ -240,15 +250,9 @@ def list_packages(
     return query.offset(skip).limit(limit).all()
 
 
-def get_packages(
-    db: Session,
-    skip: int = 0,
-    limit: int = 100,
-    name_filter: Optional[str] = None,
-    use_regex: bool = False
-) -> List[Package]:
-    """Get packages with optional filtering and pagination (alias for list_packages)."""
-    return list_packages(db, skip=skip, limit=limit, name_filter=name_filter, use_regex=use_regex)
+# Alias for backward compatibility
+list_packages = get_packages
+
 
 
 def delete_package(db: Session, package_id: int) -> bool:

@@ -137,6 +137,30 @@ class Package(Base):
     # Download tracking
     download_count = Column(Integer, default=0, nullable=False)
     
+    # Ingest status tracking (Phase 2 enhancement)
+    ingest_status = Column(
+        String(20),
+        nullable=False,
+        default="approved",
+        index=True
+    )
+    # Possible values: "approved", "rejected", "pending"
+    # - approved: Passed quality gate
+    # - rejected: Failed quality gate
+    # - pending: Submitted but not yet evaluated (for async workflow)
+    
+    quality_gate_result = Column(
+        JSON,
+        nullable=True
+    )
+    # Stores detailed quality gate evaluation results:
+    # {
+    #   "passed": true/false,
+    #   "evaluated_at": "2025-11-23T19:00:00Z",
+    #   "net_score": 0.84,  # if passed
+    #   "failing_metrics": [...]  # if failed
+    # }
+    
     # Relationships
     uploader = relationship("User", back_populates="packages_uploaded", foreign_keys=[uploaded_by])
     scores = relationship("PackageScore", back_populates="package", cascade="all, delete-orphan")
@@ -158,6 +182,7 @@ class Package(Base):
     __table_args__ = (
         UniqueConstraint('name', 'version', name='uix_package_name_version'),
         Index('ix_package_name_version', 'name', 'version'),
+        Index('ix_package_ingest_status', 'ingest_status'),  # For filtering approved artifacts
     )
     
     def __repr__(self):
