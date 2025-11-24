@@ -979,8 +979,7 @@ def create_app() -> FastAPI:
         """
         logger.info("🔍 AUTOGRADER: GET all models")
         packages = db.query(Package).filter(
-            Package.artifact_type == "model",
-            Package.ingest_status == "approved"
+            Package.artifact_type == "model"
         ).all()
         
         result = [
@@ -1008,8 +1007,7 @@ def create_app() -> FastAPI:
         """
         logger.info("🔍 AUTOGRADER: GET all code")
         packages = db.query(Package).filter(
-            Package.artifact_type == "code",
-            Package.ingest_status == "approved"
+            Package.artifact_type == "code"
         ).all()
         
         result = [
@@ -1037,8 +1035,7 @@ def create_app() -> FastAPI:
         """
         logger.info("🔍 AUTOGRADER: GET all datasets")
         packages = db.query(Package).filter(
-            Package.artifact_type == "dataset",
-            Package.ingest_status == "approved"
+            Package.artifact_type == "dataset"
         ).all()
         
         result = [
