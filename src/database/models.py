@@ -1,3 +1,4 @@
+```python
 """SQLAlchemy database models for ML Model Registry."""
 
 from datetime import datetime
@@ -5,6 +6,7 @@ from typing import Optional
 from sqlalchemy import (
     Column,
     Integer,
+    BigInteger,
     String,
     Float,
     Boolean,
@@ -119,7 +121,7 @@ class Package(Base):
     # Storage
     s3_key = Column(String(500), nullable=False)  # S3 object key
     s3_bucket = Column(String(100), nullable=False)
-    file_size_bytes = Column(Integer, nullable=False)
+    file_size_bytes = Column(BigInteger, nullable=False)
     
     # Source information
     source_url = Column(String(500), nullable=True)  # Original URL (e.g., HuggingFace)
