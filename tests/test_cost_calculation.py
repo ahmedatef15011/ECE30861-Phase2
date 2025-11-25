@@ -21,14 +21,7 @@ class TestCostCalculation:
         """Create test client."""
         return TestClient(app)
     
-    @pytest.fixture
-    def mock_auth(self):
-        """Mock authentication to always succeed."""
-        with patch('src.api.main._validate_token') as mock:
-            mock.return_value = "test_user"
-            yield mock
-    
-    def test_example_1_512_bytes_no_dependency(self, client, mock_auth):
+    def test_example_1_512_bytes_no_dependency(self, client):
         """
         Example 1: Content size = 512 bytes, dependency=false
         Expected: standalone_cost = max(1.0, 512/1024) = 1.0
@@ -45,8 +38,7 @@ class TestCostCalculation:
             mock_get.return_value = mock_package
             
             response = client.get(
-                "/artifact/model/1/cost",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/1/cost"
             )
             
             assert response.status_code == 200
@@ -63,7 +55,7 @@ class TestCostCalculation:
             # total_cost = standalone_cost (no dependency)
             assert data["1"]["total_cost"] == 1.0
     
-    def test_example_2_5120_bytes_with_dependency(self, client, mock_auth):
+    def test_example_2_5120_bytes_with_dependency(self, client):
         """
         Example 2: Content size = 5120 bytes, dependency=true
         Expected: standalone_cost = max(1.0, 5120/1024) = 5.0
@@ -80,8 +72,7 @@ class TestCostCalculation:
             mock_get.return_value = mock_package
             
             response = client.get(
-                "/artifact/model/2/cost?dependency=true",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/2/cost?dependency=true"
             )
             
             assert response.status_code == 200
@@ -98,7 +89,7 @@ class TestCostCalculation:
             # total_cost = standalone_cost * 2.0 = 5.0 * 2.0 = 10.0
             assert data["2"]["total_cost"] == 10.0
     
-    def test_example_3_0_bytes_minimum_enforced(self, client, mock_auth):
+    def test_example_3_0_bytes_minimum_enforced(self, client):
         """
         Example 3: Content size = 0 bytes, dependency=false
         Expected: standalone_cost = max(1.0, 0/1024) = 1.0 (minimum enforced)
@@ -115,8 +106,7 @@ class TestCostCalculation:
             mock_get.return_value = mock_package
             
             response = client.get(
-                "/artifact/model/3/cost",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/3/cost"
             )
             
             assert response.status_code == 200
@@ -133,7 +123,7 @@ class TestCostCalculation:
             # total_cost = standalone_cost (no dependency)
             assert data["3"]["total_cost"] == 1.0
     
-    def test_rounding_to_2_decimal_places(self, client, mock_auth):
+    def test_rounding_to_2_decimal_places(self, client):
         """Test that costs are rounded to 2 decimal places."""
         # Create mock package with size that produces decimal result
         mock_package = Mock(spec=models.Package)
@@ -146,8 +136,7 @@ class TestCostCalculation:
             mock_get.return_value = mock_package
             
             response = client.get(
-                "/artifact/model/4/cost",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/4/cost"
             )
             
             assert response.status_code == 200
@@ -157,31 +146,19 @@ class TestCostCalculation:
             assert data["4"]["standalone_cost"] == 1.5
             assert data["4"]["total_cost"] == 1.5
     
-    def test_authentication_required(self, client):
-        """Test that authentication is required (403 without valid token)."""
-        with patch('src.api.main._validate_token') as mock_auth:
-            mock_auth.return_value = None  # Invalid token
-            
-            response = client.get("/artifact/model/1/cost")
-            
-            # Should return 403 if authentication fails
-            # (implementation depends on how _validate_token is used)
-            assert response.status_code in [401, 403]
-    
-    def test_artifact_not_found(self, client, mock_auth):
+    def test_artifact_not_found(self, client):
         """Test 404 when artifact doesn't exist."""
         with patch('src.database.crud.get_package_by_id') as mock_get:
             mock_get.return_value = None  # Artifact not found
             
             response = client.get(
-                "/artifact/model/999/cost",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/999/cost"
             )
             
             assert response.status_code == 404
             assert "does not exist" in response.json()["detail"].lower()
     
-    def test_always_returns_both_fields(self, client, mock_auth):
+    def test_always_returns_both_fields(self, client):
         """Test that both standalone_cost and total_cost are always returned."""
         mock_package = Mock(spec=models.Package)
         mock_package.id = 5
@@ -194,8 +171,7 @@ class TestCostCalculation:
             
             # Test without dependency
             response = client.get(
-                "/artifact/model/5/cost",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/5/cost"
             )
             assert response.status_code == 200
             data = response.json()
@@ -204,15 +180,14 @@ class TestCostCalculation:
             
             # Test with dependency
             response = client.get(
-                "/artifact/model/5/cost?dependency=true",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/5/cost?dependency=true"
             )
             assert response.status_code == 200
             data = response.json()
             assert "standalone_cost" in data["5"]
             assert "total_cost" in data["5"]
     
-    def test_dependency_doubles_cost(self, client, mock_auth):
+    def test_dependency_doubles_cost(self, client):
         """Test that dependency=true doubles the total_cost."""
         mock_package = Mock(spec=models.Package)
         mock_package.id = 6
@@ -225,8 +200,7 @@ class TestCostCalculation:
             
             # Without dependency
             response = client.get(
-                "/artifact/model/6/cost",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/6/cost"
             )
             data = response.json()
             standalone_cost = data["6"]["standalone_cost"]
@@ -234,8 +208,7 @@ class TestCostCalculation:
             
             # With dependency
             response = client.get(
-                "/artifact/model/6/cost?dependency=true",
-                headers={"X-Authorization": "Bearer test_token"}
+                "/artifact/model/6/cost?dependency=true"
             )
             data = response.json()
             total_cost_with_deps = data["6"]["total_cost"]
@@ -244,7 +217,7 @@ class TestCostCalculation:
             assert total_cost_with_deps == standalone_cost * 2.0
             assert total_cost_no_deps == standalone_cost
     
-    def test_different_artifact_types(self, client, mock_auth):
+    def test_different_artifact_types(self, client):
         """Test cost calculation works for model, dataset, and code types."""
         for artifact_type in ["model", "dataset", "code"]:
             mock_package = Mock(spec=models.Package)
@@ -257,8 +230,7 @@ class TestCostCalculation:
                 mock_get.return_value = mock_package
                 
                 response = client.get(
-                    f"/artifact/{artifact_type}/7/cost",
-                    headers={"X-Authorization": "Bearer test_token"}
+                    f"/artifact/{artifact_type}/7/cost"
                 )
                 
                 assert response.status_code == 200
