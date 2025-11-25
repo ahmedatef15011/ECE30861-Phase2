@@ -44,7 +44,7 @@ class IngestValidator:
         self.scorer = MetricScorer(config_path)
         self.hf_api = HuggingFaceAPI()
 
-    async def validate_ingest_candidate(
+    def validate_ingest_candidate(
         self, model_name: str
     ) -> Tuple[bool, Dict[str, Any]]:
         """
@@ -77,7 +77,7 @@ class IngestValidator:
 
                 # Step 3: Score the model
                 logger.debug(f"Running metrics for {model_name}")
-                audit_result = await self.scorer.score_model(context)
+                audit_result = self.scorer.score_model(context)
 
                 # Step 4: Apply quality gate
                 passes, failing_metrics = self._apply_quality_gate(audit_result)
@@ -195,7 +195,7 @@ class IngestValidator:
 _validator = None
 
 
-async def get_validator(
+def get_validator(
     config_path: str = "config/weights.yaml",
 ) -> IngestValidator:
     """Get or create validator singleton."""
@@ -205,7 +205,7 @@ async def get_validator(
     return _validator
 
 
-async def validate_and_ingest(
+def validate_and_ingest(
     model_name: str,
     config_path: str = "config/weights.yaml",
 ) -> Tuple[bool, Dict[str, Any]]:
@@ -219,5 +219,5 @@ async def validate_and_ingest(
     Returns:
         Tuple of (passes_quality_gate, details)
     """
-    validator = await get_validator(config_path)
-    return await validator.validate_ingest_candidate(model_name)
+    validator = get_validator(config_path)
+    return validator.validate_ingest_candidate(model_name)
