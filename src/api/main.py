@@ -1813,14 +1813,15 @@ def create_app() -> FastAPI:
                 detail=f"Artifact {id} is not of type {artifact_type}"
             )
         
-        # Calculate cost based on content size (matching other team's implementation)
+        # Calculate cost based on content size (in MB as per OpenAPI spec)
         content = getattr(package, 'content', None)
         content_size = len(content) if content else 0
         logger.info(f"   📊 Content size: {content_size} bytes")
         
-        # Convert to KB with minimum of 1.0 KB
-        standalone_cost = max(1.0, content_size / 1024.0)
-        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} KB")
+        # Convert bytes to MB (divide by 1024*1024) as per OpenAPI spec
+        # Spec states: "Artifact Cost aggregates the total download size (in MB)"
+        standalone_cost = content_size / (1024.0 * 1024.0)
+        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} MB")
         
         # If dependency=true, double the cost (simple approximation)
         total_cost = standalone_cost * 2.0 if dependency else standalone_cost
@@ -1834,7 +1835,7 @@ def create_app() -> FastAPI:
         }
         logger.info(f"   📦 Response: {result}")
         
-        logger.info(f"✅ COST: {standalone_cost} KB (total: {total_cost} KB) → returning {result}")
+        logger.info(f"✅ COST: {standalone_cost} MB (total: {total_cost} MB) → returning {result}")
         return result
 
     
