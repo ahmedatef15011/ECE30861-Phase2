@@ -921,57 +921,98 @@ def create_app() -> FastAPI:
             f"type={artifact_type}, status=pending"
         )
         
-        # Now run quality gate validation
-        logger.info(f"   Validating {full_model_name}...") 
-        passes_gate, validation_result = validate_and_ingest(
-            full_model_name
-        )
+        # Only models go through quality gate validation
+        # Datasets and code are accepted without validation
+        validation_result = None
         
-        if not passes_gate:
-            # Quality gate FAILED - update package status to rejected
-            logger.warning(
-                f"❌ QUALITY GATE FAILED: {artifact_name} - "
-                f"Failing metrics: {validation_result.get('failing_metrics')}"
+        if artifact_type == "model":
+            # Run quality gate validation for models only
+            logger.info(f"   Validating {full_model_name}...") 
+            passes_gate, validation_result = validate_and_ingest(
+                full_model_name
             )
             
-            package.ingest_status = "rejected"
+            if not passes_gate:
+                # Quality gate FAILED - update package status to rejected
+                logger.warning(
+                    f"❌ QUALITY GATE FAILED: {artifact_name} - "
+                    f"Failing metrics: {validation_result.get('failing_metrics')}"
+                )
+                
+                package.ingest_status = "rejected"
+                package.quality_gate_result = {
+                    "passed": False,
+                    "evaluated_at": datetime.utcnow().isoformat(),
+                    "failing_metrics": validation_result.get("failing_metrics", [])
+                }
+                db.commit()
+                
+                logger.info(
+                    f"📊 PACKAGE UPDATED: id={package.id}, status=rejected"
+                )
+                
+                # Save scores even for failed artifacts
+                if validation_result and validation_result.get("all_scores"):
+                    scores = validation_result["all_scores"]
+                    crud.create_or_update_package_score(
+                        db,
+                        package_id=package.id,
+                        ramp_up_time=scores.get("ramp_up_time", 0.0),
+                        bus_factor=scores.get("bus_factor", 0.0),
+                        performance_claims=scores.get("performance_claims", 0.0),
+                        license_score=scores.get("license_score", 0.0),
+                        dataset_quality=scores.get("dataset_quality", 0.0),
+                        dataset_code_linkage=scores.get("dataset_and_code", 0.0),
+                        code_quality=scores.get("code_quality", 0.0),
+                        reproducibility=scores.get("reproducibility", 0.0),
+                        reviewedness=scores.get("reviewedness", 0.0),
+                        treescore=scores.get("treescore", 0.0),
+                        net_score=scores.get("net_score", 0.0)
+                    )
+                    logger.info(f"💾 Saved scores for rejected artifact {package.id}")
+                
+                # Still return 424 per OpenAPI spec
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=424,
+                    detail={
+                        "message": "Artifact disqualified due to ratings",
+                        "failing_metrics": validation_result.get("failing_metrics")
+                    }
+                )
+            
+            # Quality gate PASSED - update package status to approved
+            logger.info(f"✅ QUALITY GATE PASSED: {artifact_name}")
+            
+            package.ingest_status = "approved"
             package.quality_gate_result = {
-                "passed": False,
+                "passed": True,
                 "evaluated_at": datetime.utcnow().isoformat(),
-                "failing_metrics": validation_result.get("failing_metrics", [])
+                "net_score": validation_result.get("all_scores", {}).get("net_score", 0.0)
             }
             db.commit()
+            db.refresh(package)
             
             logger.info(
-                f"📊 PACKAGE UPDATED: id={package.id}, status=rejected"
+                f"📊 PACKAGE UPDATED: id={package.id}, status=approved, "
+                f"net_score={package.quality_gate_result.get('net_score', 0.0)}"
             )
+        else:
+            # Dataset and code artifacts are auto-approved without quality gate
+            logger.info(f"✅ AUTO-APPROVED: {artifact_type} artifacts don't require quality gate validation")
             
-            # Still return 424 per OpenAPI spec
-            from fastapi import HTTPException
-            raise HTTPException(
-                status_code=424,
-                detail={
-                    "message": "Artifact disqualified due to ratings",
-                    "failing_metrics": validation_result.get("failing_metrics")
-                }
+            package.ingest_status = "approved"
+            package.quality_gate_result = {
+                "passed": True,
+                "evaluated_at": datetime.utcnow().isoformat(),
+                "note": f"{artifact_type} artifacts are accepted without quality gate validation"
+            }
+            db.commit()
+            db.refresh(package)
+            
+            logger.info(
+                f"📊 PACKAGE UPDATED: id={package.id}, status=approved (auto)"
             )
-        
-        # Quality gate PASSED - update package status to approved
-        logger.info(f"✅ QUALITY GATE PASSED: {artifact_name}")
-        
-        package.ingest_status = "approved"
-        package.quality_gate_result = {
-            "passed": True,
-            "evaluated_at": datetime.utcnow().isoformat(),
-            "net_score": validation_result.get("all_scores", {}).get("net_score", 0.0)
-        }
-        db.commit()
-        db.refresh(package)
-        
-        logger.info(
-            f"📊 PACKAGE UPDATED: id={package.id}, status=approved, "
-            f"net_score={package.quality_gate_result.get('net_score', 0.0)}"
-        )
         
         # S3 Upload (if enabled) - only for approved artifacts
         enable_s3 = os.getenv(
@@ -1024,8 +1065,8 @@ def create_app() -> FastAPI:
         else:
             logger.info("S3 storage disabled - storing metadata only")
         
-        # Store the quality gate scores in database
-        if validation_result and validation_result.get("all_scores"):
+        # Store the quality gate scores in database (only for models)
+        if artifact_type == "model" and validation_result and validation_result.get("all_scores"):
             scores = validation_result["all_scores"]
             crud.create_or_update_package_score(
                 db,
