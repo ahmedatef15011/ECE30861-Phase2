@@ -1,29 +1,3 @@
 https://github.com/google-research/bert, https://huggingface.co/datasets/bookcorpus/bookcorpus, https://huggingface.co/google-bert/bert-base-uncased
-
-, https://huggingface.co/datasets/rajpurkar/squad, https://huggingface.co/parvk11/audience_classifier_model
-
-, https://www.kaggle.com/datasets/hliang001/flickr2k, https://huggingface.co/distilbert-base-uncased-distilled-squad
-
-https://github.com/mv-lab/swin2sr, , https://huggingface.co/caidas/swin2SR-lightweight-x2-64
-
-https://github.com/vikhyat/moondream, , https://huggingface.co/vikhyatk/moondream2
-
-https://github.com/microsoft/git, , https://huggingface.co/microsoft/git-base
-
-, https://github.com/zalandoresearch/fashion-mnist, https://huggingface.co/WinKawaks/vit-tiny-patch16-224
-
-https://github.com/patrickjohncyh/fashion-clip, , https://huggingface.co/patrickjohncyh/fashion-clip
-
-https://github.com/huggingface/lerobot/tree/main, https://huggingface.co/datasets/lerobot/pusht, https://huggingface.co/lerobot/diffusion_pusht
-
-https://github.com/Parth1811/ptm-recommendation-with-transformers.git, , https://huggingface.co/parthvpatil18/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab
-
-https://github.com/KaimingHe/deep-residual-networks, , https://huggingface.co/microsoft/resnet-50
-
-, https://huggingface.co/datasets/HuggingFaceM4/FairFace, https://huggingface.co/crangana/trained-gender
-
-, https://huggingface.co/datasets/ILSVRC/imagenet-1k, https://huggingface.co/onnx-community/trained-gender-ONNX
-
-https://github.com/openai/whisper, , 
-
-https://github.com/huggingface/transformers-research-projects/tree/main/distillation, , 
+,,https://huggingface.co/parvk11/audience_classifier_model
+,,https://huggingface.co/openai/whisper-tiny/tree/main
