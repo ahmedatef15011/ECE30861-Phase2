@@ -1745,105 +1745,6 @@ def create_app() -> FastAPI:
         """Cost response for artifacts."""
         pass
     
-    # Helper function to estimate model size from name when file_size_bytes is not available
-    def _estimate_model_size_from_name(name: str, artifact_type: str) -> float:
-        """
-        Estimate artifact size in MB based on name patterns.
-        Used as fallback when file_size_bytes is 0 or unavailable.
-        
-        Returns size in MB.
-        """
-        import re
-        
-        if not name:
-            return 100.0  # default fallback
-        
-        model_name = name.lower().replace('_', '-').replace(' ', '-')
-        
-        # For datasets and code, use smaller defaults
-        if artifact_type == "dataset":
-            return 50.0  # 50 MB default for datasets
-        elif artifact_type == "code":
-            return 10.0  # 10 MB default for code repositories
-        
-        # Model size mappings (in MB)
-        model_size_mappings = {
-            'bert-base-uncased': 440.0,        # ~110M parameters, ~440 MB
-            'distilbert': 260.0,               # ~66M parameters, ~260 MB
-            'whisper-tiny': 75.0,              # ~39M parameters
-            'whisper-small': 240.0,            # ~61M parameters
-            'whisper-base': 290.0,             # ~74M parameters
-            'whisper-medium': 1530.0,          # ~769M parameters
-            'whisper-large': 3090.0,           # ~1550M parameters
-            'audience-classifier': 100.0,      # small classifier
-            'gemma-3-270m': 540.0,
-            'swin2sr': 10.0,                   # image super-resolution
-            'moondream': 3700.0,               # vision-language model
-            'resnet-50': 400.0,                # ResNet-50
-            'vit': 350.0,                      # Vision Transformer
-            'clip': 1700.0,                    # CLIP model
-            'diffusion': 1000.0,               # diffusion models
-        }
-        
-        # Check for exact matches
-        for model_key, size in model_size_mappings.items():
-            if model_key in model_name:
-                return size
-        
-        # Pattern matching for parameter counts
-        # Billion parameters (e.g., "7b", "1.3b")
-        b_patterns = [
-            r'(\d+(?:\.\d+)?)b(?:-|_|$|\s)',
-            r'(\d+(?:\.\d+)?)-?billion',
-        ]
-        for pattern in b_patterns:
-            match = re.search(pattern, model_name)
-            if match:
-                param_count = float(match.group(1))
-                # 2000 MB per billion parameters (2 bytes per param for fp16)
-                return param_count * 2000.0
-        
-        # Million parameters (e.g., "125m", "350m")
-        m_patterns = [
-            r'(\d+(?:\.\d+)?)m(?:-|_|$|\s)',
-            r'(\d+(?:\.\d+)?)-?million',
-        ]
-        for pattern in m_patterns:
-            match = re.search(pattern, model_name)
-            if match:
-                param_count = float(match.group(1))
-                # 2 MB per million parameters
-                return param_count * 2.0
-        
-        # Architecture-based heuristics
-        architecture_sizes = {
-            ('bert-large',): 1300.0,
-            ('bert-base',): 440.0,
-            ('distilbert',): 260.0,
-            ('t5-small',): 240.0,
-            ('t5-base',): 890.0,
-            ('t5-large',): 3000.0,
-            ('gpt2',): 500.0,
-            ('gpt2-medium',): 1400.0,
-            ('gpt2-large',): 3200.0,
-            ('mini', 'tiny', 'nano'): 100.0,
-            ('small',): 300.0,
-            ('base', 'medium'): 800.0,
-            ('large', 'big'): 2500.0,
-            ('xl', 'extra-large'): 4000.0,
-            ('xxl', 'ultra', 'giant'): 12000.0,
-        }
-        
-        for keywords, size in architecture_sizes.items():
-            if any(keyword in model_name for keyword in keywords):
-                return size
-        
-        # Default fallback based on artifact type
-        if artifact_type == "model":
-            return 500.0  # 500 MB default for models
-        
-        return 100.0  # generic fallback
-    
     @app.get(
         "/artifact/{artifact_type}/{id}/cost",
         tags=["artifacts"],
@@ -1916,17 +1817,9 @@ def create_app() -> FastAPI:
         file_size = getattr(package, 'file_size_bytes', 0)
         logger.info(f"   📊 File size: {file_size} bytes")
         
-        # If file_size is 0 or very small (< 1KB), use estimation fallback
-        if file_size < 1024:
-            logger.warning(f"   ⚠️  File size is {file_size} bytes (< 1KB), using estimation fallback")
-            estimated_size_mb = _estimate_model_size_from_name(package.name, artifact_type)
-            logger.info(f"   📐 Estimated size from name: {estimated_size_mb} MB")
-            standalone_cost = estimated_size_mb
-        else:
-            # Convert bytes to MB (divide by 1024*1024) as per OpenAPI spec
-            # Spec states: "Artifact Cost aggregates the total download size (in MB)"
-            standalone_cost = file_size / (1024.0 * 1024.0)
-        
+        # Convert bytes to MB (divide by 1024*1024) as per OpenAPI spec
+        # Spec states: "Artifact Cost aggregates the total download size (in MB)"
+        standalone_cost = file_size / (1024.0 * 1024.0)
         logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} MB")
         
         # If dependency=true, double the cost (simple approximation)
