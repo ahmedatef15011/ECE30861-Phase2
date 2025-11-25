@@ -89,7 +89,7 @@ async def ingest_model(
             )
 
         # Validate model against quality gate
-        passes_gate, validation_result = await validate_and_ingest(
+        passes_gate, validation_result = validate_and_ingest(
             model_name
         )
 
