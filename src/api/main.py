@@ -1670,6 +1670,7 @@ def create_app() -> FastAPI:
         
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
+            logger.warning(f"❌ Invalid artifact type: {artifact_type}")
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid artifact type: {artifact_type}"
@@ -1678,7 +1679,9 @@ def create_app() -> FastAPI:
         # Get package by ID
         try:
             package_id = int(id)
+            logger.info(f"   📋 Looking up package ID: {package_id}")
         except ValueError:
+            logger.warning(f"❌ Invalid ID format: {id}")
             raise HTTPException(
                 status_code=400,
                 detail="Invalid artifact ID format"
@@ -1686,14 +1689,18 @@ def create_app() -> FastAPI:
         
         package = crud.get_package_by_id(db, package_id)
         if not package:
+            logger.warning(f"❌ Package {package_id} not found")
             raise HTTPException(
                 status_code=404,
                 detail=f"Artifact does not exist: {id}"
             )
         
+        logger.info(f"   ✓ Found package: name={package.name}, type={getattr(package, 'artifact_type', 'model')}")
+        
         # Check artifact type matches
         pkg_artifact_type = getattr(package, 'artifact_type', 'model')
         if pkg_artifact_type != artifact_type:
+            logger.warning(f"❌ Type mismatch: expected {artifact_type}, got {pkg_artifact_type}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Artifact {id} is not of type {artifact_type}"
@@ -1701,7 +1708,10 @@ def create_app() -> FastAPI:
         
         # Calculate cost (file size in MB)
         file_size_bytes = package.file_size_bytes or 0
+        logger.info(f"   📊 Raw file_size_bytes from DB: {file_size_bytes}")
+        
         standalone_cost = round(file_size_bytes / (1024 * 1024), 1)  # Convert to MB
+        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} MB")
         
         # Build cost response
         if dependency:
@@ -1713,15 +1723,18 @@ def create_app() -> FastAPI:
                     "total_cost": standalone_cost
                 }
             }
+            logger.info(f"   📦 Response (with deps): {result}")
         else:
             result = {
                 id: {
                     "total_cost": standalone_cost
                 }
             }
+            logger.info(f"   📦 Response (no deps): {result}")
         
-        logger.info(f"✅ COST: {standalone_cost} MB")
+        logger.info(f"✅ COST: {standalone_cost} MB → returning {result}")
         return result
+
     
     # Lineage endpoint - Get artifact lineage graph (BASELINE)
     class ArtifactLineageNode(BaseModel):
