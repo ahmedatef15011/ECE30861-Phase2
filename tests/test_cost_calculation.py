@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 from src.database import models
 from src.api.main import app
+from src.api.dependencies import get_current_user
 
 
 class TestCostCalculation:
@@ -18,8 +19,23 @@ class TestCostCalculation:
     
     @pytest.fixture
     def client(self):
-        """Create test client."""
-        return TestClient(app)
+        """Create test client with mocked authentication."""
+        # Mock the authentication dependency
+        def override_get_current_user():
+            mock_user = Mock(spec=models.User)
+            mock_user.id = 1
+            mock_user.username = "test_user"
+            mock_user.is_admin = False
+            return mock_user
+        
+        # Override the dependency
+        app.dependency_overrides[get_current_user] = override_get_current_user
+        
+        client = TestClient(app)
+        yield client
+        
+        # Clean up
+        app.dependency_overrides.clear()
     
     def test_example_1_512_bytes_no_dependency(self, client):
         """

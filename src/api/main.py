@@ -16,8 +16,8 @@ from src.api.config import settings
 from src.api.routes import users, packages, ratings, system
 from src.database.connection import init_db, reset_db
 from src.database.init_db import create_default_user
-from src.api.dependencies import get_db, get_optional_user
-from src.database.models import Package
+from src.api.dependencies import get_db, get_optional_user, get_current_user
+from src.database.models import Package, User
 from src.database import crud
 
 # Configure comprehensive logging
@@ -1755,10 +1755,12 @@ def create_app() -> FastAPI:
         id: str,
         dependency: bool = Query(False),
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Get the cost of an artifact (BASELINE).
+        
+        **Authentication Required**: Must provide valid JWT token via Bearer authentication.
         
         Cost is measured in KB (kilobytes) based on content size.
         Formula: standalone_cost = max(1.0, content_size_bytes / 1024.0)
@@ -1770,10 +1772,15 @@ def create_app() -> FastAPI:
             id: Artifact ID
             dependency: Include dependencies in cost calculation (default: False)
             db: Database session
-            x_authorization: Auth token
+            current_user: Authenticated user (from JWT token)
             
         Returns:
             Cost information with standalone_cost and total_cost in KB
+            
+        Raises:
+            HTTPException 401/403: Authentication failed or invalid token
+            HTTPException 400: Invalid artifact type or ID
+            HTTPException 404: Artifact not found or type mismatch
             
         Example calculations:
             - Content size = 512 bytes, dependency=false
@@ -1788,7 +1795,7 @@ def create_app() -> FastAPI:
               → standalone_cost = max(1.0, 0/1024) = 1.0 KB (minimum enforced)
               → total_cost = 1.0 KB
         """
-        logger.info(f"💰 COST QUERY: type={artifact_type}, id={id}, deps={dependency}")
+        logger.info(f"💰 COST QUERY: type={artifact_type}, id={id}, deps={dependency}, user={current_user.username}")
         
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
