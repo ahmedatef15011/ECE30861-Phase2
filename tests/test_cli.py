@@ -31,7 +31,7 @@ def test_process_urls_file_not_found():
     assert exc_info.value.code == 1
 
 
-@patch("src.cli.asyncio.run")
+@patch("src.cli._process_contexts")
 @patch("src.cli.build_model_contexts")
 def test_process_urls_success(mock_build_contexts, mock_asyncio_run, temp_url_file):
     """Test successful URL processing."""

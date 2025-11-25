@@ -100,7 +100,7 @@ metric_weights:
         os.unlink(temp_path)
 
 
-@patch("src.cli.asyncio.run")
+@patch("src.cli._process_contexts")
 @patch("src.cli.build_model_contexts")
 @patch("src.cli.setup_logging")
 def test_process_urls_integration(
