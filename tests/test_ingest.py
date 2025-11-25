@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.ingest import (
     IngestValidator,
-    INGEST_QUALITY_GATE_METRICS,
+    INGEST_NET_SCORE_THRESHOLD,
 )
 from src.models import (
     AuditResult,
@@ -25,8 +25,8 @@ class TestIngestValidator:
         return IngestValidator()
 
     def test_quality_gate_all_pass(self, validator):
-        """Test quality gate passes when all metrics >= 0.5."""
-        # Create mock audit result with all metrics passing
+        """Test quality gate passes when net_score >= 0.5."""
+        # Create mock audit result with net_score passing
         audit_result = AuditResult(
             name="test/model",
             category="MODEL",
@@ -67,17 +67,17 @@ class TestIngestValidator:
         assert len(failing) == 0
 
     def test_quality_gate_some_fail(self, validator):
-        """Test quality gate fails when any metric < 0.5."""
+        """Test quality gate fails when net_score < 0.5."""
         audit_result = AuditResult(
             name="test/model",
             category="MODEL",
-            net_score=0.4,
+            net_score=0.4,  # Below threshold
             net_score_latency=100,
-            reproducibility=0.3,  # FAIL
+            reproducibility=0.3,
             reproducibility_latency=50,
             code_quality=0.8,
             code_quality_latency=50,
-            license=0.4,  # FAIL
+            license=0.4,
             license_latency=10,
             dataset_quality=0.6,
             dataset_quality_latency=20,
@@ -105,18 +105,18 @@ class TestIngestValidator:
         passes, failing = validator._apply_quality_gate(audit_result)
 
         assert passes is False
-        assert len(failing) == 2
-        assert any(m["metric"] == "reproducibility" for m in failing)
-        assert any(m["metric"] == "license" for m in failing)
+        assert len(failing) == 1
+        assert failing[0]["metric"] == "net_score"
+        assert failing[0]["score"] == 0.4
 
     def test_quality_gate_edge_case_exactly_half(self, validator):
-        """Test quality gate passes when metric is exactly 0.5."""
+        """Test quality gate passes when net_score is exactly 0.5."""
         audit_result = AuditResult(
             name="test/model",
             category="MODEL",
-            net_score=0.5,
+            net_score=0.5,  # Exactly threshold
             net_score_latency=100,
-            reproducibility=0.5,  # Exactly threshold
+            reproducibility=0.5,
             reproducibility_latency=50,
             code_quality=0.5,
             code_quality_latency=50,
@@ -250,13 +250,13 @@ class TestIngestValidator:
             mock_result = AuditResult(
                 name="unknown/model",
                 category="MODEL",
-                net_score=0.3,
+                net_score=0.3,  # Below threshold
                 net_score_latency=100,
-                reproducibility=0.1,  # FAIL
+                reproducibility=0.1,
                 reproducibility_latency=50,
                 code_quality=0.8,
                 code_quality_latency=50,
-                license=0.2,  # FAIL
+                license=0.2,
                 license_latency=10,
                 dataset_quality=0.6,
                 dataset_quality_latency=20,
@@ -289,7 +289,8 @@ class TestIngestValidator:
             assert passes is False
             assert result["is_ingestible"] is False
             assert result["artifact_id"] is None
-            assert len(result["failing_metrics"]) == 2
+            assert len(result["failing_metrics"]) == 1
+            assert result["failing_metrics"][0]["metric"] == "net_score"
 
 
 class TestLocalStorage:
@@ -389,16 +390,11 @@ class TestLocalStorage:
 class TestIngestQualityGateMetrics:
     """Test quality gate metric definitions."""
 
-    def test_quality_gate_metrics_defined(self):
-        """Test that quality gate metrics are properly defined."""
-        # Updated for reviewedness metric
-        assert len(INGEST_QUALITY_GATE_METRICS) == 9
-        assert "reproducibility" in INGEST_QUALITY_GATE_METRICS
-        assert "code_quality" in INGEST_QUALITY_GATE_METRICS
-        assert "license" in INGEST_QUALITY_GATE_METRICS
-        assert "reviewedness" in INGEST_QUALITY_GATE_METRICS
+    def test_quality_gate_threshold_defined(self):
+        """Test that quality gate threshold is properly defined."""
+        assert INGEST_NET_SCORE_THRESHOLD == 0.5
 
-    def test_quality_gate_thresholds(self):
-        """Test that all thresholds are 0.5."""
-        for metric, threshold in INGEST_QUALITY_GATE_METRICS.items():
-            assert threshold == 0.5, f"{metric} has incorrect threshold"
+    def test_quality_gate_net_score_only(self):
+        """Test that quality gate only checks net_score."""
+        # Verify the threshold is for net score only
+        assert INGEST_NET_SCORE_THRESHOLD == 0.5
