@@ -849,10 +849,47 @@ def create_app() -> FastAPI:
                         logger.info(f"📊 Calculated dataset size: {file_size_bytes} bytes ({file_size_bytes / (1024*1024):.1f} MB)")
             
             else:
-                # For code artifacts (GitHub repos), we can't easily get size without cloning
-                # Set to 0 for now - could implement GitHub API call in future
-                logger.info(f"📊 Code artifact - size calculation not implemented, using 0")
-                file_size_bytes = 0
+                # For code artifacts (GitHub repos), use GitHub API
+                if "github.com" in url.lower():
+                    try:
+                        import requests
+                        import re
+                        
+                        # Extract owner/repo from GitHub URL
+                        # Handles: github.com/owner/repo, github.com/owner/repo.git, github.com/owner/repo/tree/branch
+                        match = re.search(r'github\.com[:/]([^/]+)/([^/\.]+)', url)
+                        if match:
+                            owner, repo = match.groups()
+                            
+                            # Use GitHub API to get repo info
+                            github_api_url = f"https://api.github.com/repos/{owner}/{repo}"
+                            headers = {}
+                            
+                            # Use GITHUB_TOKEN if available (optional)
+                            github_token = os.getenv("GITHUB_TOKEN")
+                            if github_token:
+                                headers["Authorization"] = f"token {github_token}"
+                            
+                            response = requests.get(github_api_url, headers=headers, timeout=10)
+                            
+                            if response.status_code == 200:
+                                repo_data = response.json()
+                                # GitHub returns size in KB
+                                file_size_bytes = repo_data.get("size", 0) * 1024
+                                logger.info(f"📊 GitHub repo size: {file_size_bytes} bytes ({file_size_bytes / (1024*1024):.1f} MB)")
+                            else:
+                                logger.warning(f"GitHub API returned {response.status_code} for {owner}/{repo}")
+                                file_size_bytes = 0
+                        else:
+                            logger.warning(f"Could not extract owner/repo from GitHub URL: {url}")
+                            file_size_bytes = 0
+                    except Exception as e:
+                        logger.warning(f"Could not get size from GitHub API: {e}")
+                        file_size_bytes = 0
+                else:
+                    # Non-GitHub code artifact
+                    logger.info(f"📊 Code artifact (non-GitHub) - size calculation not implemented, using 0")
+                    file_size_bytes = 0
                 
         except Exception as e:
             # Handle 401 errors and other failures gracefully
