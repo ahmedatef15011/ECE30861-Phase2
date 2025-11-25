@@ -389,6 +389,11 @@ class GitInspector:
 
     def cleanup(self):
         # clean up cache directory
-        # ✅ FIX: Do NOT delete the shared cache directory
-        # Only delete if it was a temporary one we created (but now we use shared)
-        pass
+        # Delete the cache directory (useful for tests)
+        if os.path.exists(self.cache_dir):
+            try:
+                shutil.rmtree(self.cache_dir)
+                logger.debug(f"Cleaned up cache directory: {self.cache_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup cache directory: {e}")
+

@@ -379,7 +379,7 @@ def test_create_package_without_auth():
             "description": "Should fail"
         }
     )
-    assert response.status_code == 403
+    assert response.status_code == 401  # 401 = not authenticated
 
 
 def test_get_package_by_id():
@@ -609,7 +609,7 @@ def test_access_protected_endpoint_without_token():
             "version": "1.0.0"
         }
     )
-    assert response.status_code == 403
+    assert response.status_code == 401  # 401 = not authenticated
 
 
 def test_access_with_invalid_token():
