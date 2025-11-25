@@ -26,6 +26,18 @@ class NDJSONOutputter:
             "performance_claims_latency": result.performance_claims_latency,
             "license": result.license,
             "license_latency": result.license_latency,
+            "dataset_and_code_score": result.dataset_and_code_score,
+            "dataset_and_code_score_latency": result.dataset_and_code_score_latency,
+            "dataset_quality": result.dataset_quality,
+            "dataset_quality_latency": result.dataset_quality_latency,
+            "code_quality": result.code_quality,
+            "code_quality_latency": result.code_quality_latency,
+            "reproducibility": result.reproducibility,
+            "reproducibility_latency": result.reproducibility_latency,
+            "reviewedness": result.reviewedness,
+            "reviewedness_latency": result.reviewedness_latency,
+            "tree_score": result.treescore,
+            "tree_score_latency": result.treescore_latency,
             "size_score": {
                 "raspberry_pi": result.size_score.raspberry_pi,
                 "jetson_nano": result.size_score.jetson_nano,
@@ -33,13 +45,22 @@ class NDJSONOutputter:
                 "aws_server": result.size_score.aws_server,
             },
             "size_score_latency": result.size_score_latency,
-            "dataset_and_code_score": result.dataset_and_code_score,
-            "dataset_and_code_score_latency": result.dataset_and_code_score_latency,
-            "dataset_quality": result.dataset_quality,
-            "dataset_quality_latency": result.dataset_quality_latency,
-            "code_quality": result.code_quality,
-            "code_quality_latency": result.code_quality_latency,
         }
         json_line = json.dumps(data, separators=(",", ":"))
         print(json_line, file=sys.stdout)
         sys.stdout.flush()
+
+
+def format_output(result: AuditResult) -> str:
+    """Format audit result for output."""
+    outputter = NDJSONOutputter()
+    # Capture the output by redirecting stdout
+    import io
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        outputter.output_single_result(result)
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+    return output.strip()

@@ -1,0 +1,201 @@
+timestamp,message
+1763333598137,2025-11-16 22:53:18 | INFO     | src.api.main              | ✅ [1763333598133] POST /artifacts → 200 (0.004s)
+1763333598138,"INFO:     169.254.172.3:39974 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333598466,2025-11-16 22:53:18 | INFO     | src.api.main              | 📥 [1763333598465] GET /api/v1/system/health from 169.254.172.3
+1763333598467,2025-11-16 22:53:18 | INFO     | src.api.main              | ✅ [1763333598465] GET /api/v1/system/health → 200 (0.001s)
+1763333598468,"INFO:     169.254.172.3:39974 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333598753,2025-11-16 22:53:18 | INFO     | src.api.main              | 📥 [1763333598752] POST /artifacts from 169.254.172.3
+1763333598756,2025-11-16 22:53:18 | INFO     | src.api.main              | ✅ [1763333598752] POST /artifacts → 200 (0.003s)
+1763333598756,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333599379,2025-11-16 22:53:19 | INFO     | src.api.main              | 📥 [1763333599379] POST /artifacts from 169.254.172.3
+1763333599382,2025-11-16 22:53:19 | INFO     | src.api.main              | ✅ [1763333599379] POST /artifacts → 200 (0.003s)
+1763333599383,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333600000,2025-11-16 22:53:19 | INFO     | src.api.main              | 📥 [1763333599999] POST /artifacts from 169.254.172.3
+1763333600004,2025-11-16 22:53:20 | INFO     | src.api.main              | ✅ [1763333599999] POST /artifacts → 200 (0.004s)
+1763333600004,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333600620,2025-11-16 22:53:20 | INFO     | src.api.main              | 📥 [1763333600620] POST /artifacts from 169.254.172.3
+1763333600624,2025-11-16 22:53:20 | INFO     | src.api.main              | ✅ [1763333600620] POST /artifacts → 200 (0.003s)
+1763333600624,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333601239,2025-11-16 22:53:21 | INFO     | src.api.main              | 📥 [1763333601239] POST /artifacts from 169.254.172.3
+1763333601242,2025-11-16 22:53:21 | INFO     | src.api.main              | ✅ [1763333601239] POST /artifacts → 200 (0.003s)
+1763333601242,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333601857,2025-11-16 22:53:21 | INFO     | src.api.main              | 📥 [1763333601857] POST /artifacts from 169.254.172.3
+1763333601860,2025-11-16 22:53:21 | INFO     | src.api.main              | ✅ [1763333601857] POST /artifacts → 200 (0.003s)
+1763333601860,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333602474,2025-11-16 22:53:22 | INFO     | src.api.main              | 📥 [1763333602474] POST /artifacts from 169.254.172.3
+1763333602477,2025-11-16 22:53:22 | INFO     | src.api.main              | ✅ [1763333602474] POST /artifacts → 200 (0.003s)
+1763333602477,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333603090,2025-11-16 22:53:23 | INFO     | src.api.main              | 📥 [1763333603090] POST /artifacts from 169.254.172.3
+1763333603093,2025-11-16 22:53:23 | INFO     | src.api.main              | ✅ [1763333603090] POST /artifacts → 200 (0.003s)
+1763333603093,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333603717,2025-11-16 22:53:23 | INFO     | src.api.main              | 📥 [1763333603717] POST /artifacts from 169.254.172.3
+1763333603720,2025-11-16 22:53:23 | INFO     | src.api.main              | ✅ [1763333603717] POST /artifacts → 200 (0.003s)
+1763333603720,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333604342,2025-11-16 22:53:24 | INFO     | src.api.main              | 📥 [1763333604341] POST /artifacts from 169.254.172.3
+1763333604345,2025-11-16 22:53:24 | INFO     | src.api.main              | ✅ [1763333604341] POST /artifacts → 200 (0.004s)
+1763333604345,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333604961,2025-11-16 22:53:24 | INFO     | src.api.main              | 📥 [1763333604961] POST /artifacts from 169.254.172.3
+1763333604964,2025-11-16 22:53:24 | INFO     | src.api.main              | ✅ [1763333604961] POST /artifacts → 200 (0.003s)
+1763333604964,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333605586,2025-11-16 22:53:25 | INFO     | src.api.main              | 📥 [1763333605586] POST /artifacts from 169.254.172.3
+1763333605589,2025-11-16 22:53:25 | INFO     | src.api.main              | ✅ [1763333605586] POST /artifacts → 200 (0.003s)
+1763333605589,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333606206,2025-11-16 22:53:26 | INFO     | src.api.main              | 📥 [1763333606206] POST /artifacts from 169.254.172.3
+1763333606209,2025-11-16 22:53:26 | INFO     | src.api.main              | ✅ [1763333606206] POST /artifacts → 200 (0.003s)
+1763333606209,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333606828,2025-11-16 22:53:26 | INFO     | src.api.main              | 📥 [1763333606828] POST /artifacts from 169.254.172.3
+1763333606831,2025-11-16 22:53:26 | INFO     | src.api.main              | ✅ [1763333606828] POST /artifacts → 200 (0.003s)
+1763333606831,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333607452,2025-11-16 22:53:27 | INFO     | src.api.main              | 📥 [1763333607452] POST /artifacts from 169.254.172.3
+1763333607455,2025-11-16 22:53:27 | INFO     | src.api.main              | ✅ [1763333607452] POST /artifacts → 200 (0.003s)
+1763333607456,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333608094,2025-11-16 22:53:28 | INFO     | src.api.main              | 📥 [1763333608093] POST /artifacts from 169.254.172.3
+1763333608097,2025-11-16 22:53:28 | INFO     | src.api.main              | ✅ [1763333608093] POST /artifacts → 200 (0.004s)
+1763333608097,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333608744,2025-11-16 22:53:28 | INFO     | src.api.main              | 📥 [1763333608744] POST /artifacts from 169.254.172.3
+1763333608747,2025-11-16 22:53:28 | INFO     | src.api.main              | ✅ [1763333608744] POST /artifacts → 200 (0.003s)
+1763333608747,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333609364,2025-11-16 22:53:29 | INFO     | src.api.main              | 📥 [1763333609364] POST /artifacts from 169.254.172.3
+1763333609368,2025-11-16 22:53:29 | INFO     | src.api.main              | ✅ [1763333609364] POST /artifacts → 200 (0.004s)
+1763333609368,"INFO:     169.254.172.3:34078 - ""POST /artifacts HTTP/1.1"" 200 OK"
+1763333609988,2025-11-16 22:53:29 | INFO     | src.api.main              | 📥 [1763333609988] GET /artifacts/code/ from 169.254.172.3
+1763333609988,2025-11-16 22:53:29 | INFO     | src.api.main              | ❌ [1763333609988] GET /artifacts/code/ → 404 (0.001s)
+1763333609988,"INFO:     169.254.172.3:34078 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333610610,2025-11-16 22:53:30 | INFO     | src.api.main              | 📥 [1763333610609] GET /artifacts/dataset/ from 169.254.172.3
+1763333610610,2025-11-16 22:53:30 | INFO     | src.api.main              | ❌ [1763333610609] GET /artifacts/dataset/ → 404 (0.001s)
+1763333610610,"INFO:     169.254.172.3:34078 - ""GET /artifacts/dataset/ HTTP/1.1"" 404 Not Found"
+1763333611224,2025-11-16 22:53:31 | INFO     | src.api.main              | 📥 [1763333611224] GET /artifacts/model/1 from 169.254.172.3
+1763333611228,"2025-11-16 22:53:31 | INFO     | src.api.main              | 🔍 AUTOGRADER QUERY byId: type=model, id=1"
+1763333611228,"2025-11-16 22:53:31 | INFO     | src.api.main              |    ✅ Found: id=1, name=bert-base-uncased, type=model"
+1763333611228,2025-11-16 22:53:31 | INFO     | src.api.main              | ✅ [1763333611224] GET /artifacts/model/1 → 200 (0.004s)
+1763333611228,"INFO:     169.254.172.3:34078 - ""GET /artifacts/model/1 HTTP/1.1"" 200 OK"
+1763333611845,2025-11-16 22:53:31 | INFO     | src.api.main              | 📥 [1763333611845] GET /artifacts/model/ from 169.254.172.3
+1763333611846,2025-11-16 22:53:31 | INFO     | src.api.main              | ❌ [1763333611845] GET /artifacts/model/ → 404 (0.001s)
+1763333611846,"INFO:     169.254.172.3:34078 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333612467,2025-11-16 22:53:32 | INFO     | src.api.main              | 📥 [1763333612467] GET /artifacts/code/ from 169.254.172.3
+1763333612467,2025-11-16 22:53:32 | INFO     | src.api.main              | ❌ [1763333612467] GET /artifacts/code/ → 404 (0.001s)
+1763333612468,"INFO:     169.254.172.3:34078 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333613083,2025-11-16 22:53:33 | INFO     | src.api.main              | 📥 [1763333613083] GET /artifacts/code/ from 169.254.172.3
+1763333613084,2025-11-16 22:53:33 | INFO     | src.api.main              | ❌ [1763333613083] GET /artifacts/code/ → 404 (0.001s)
+1763333613084,"INFO:     169.254.172.3:34078 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333613699,2025-11-16 22:53:33 | INFO     | src.api.main              | 📥 [1763333613698] GET /artifacts/dataset/ from 169.254.172.3
+1763333613699,2025-11-16 22:53:33 | INFO     | src.api.main              | ❌ [1763333613698] GET /artifacts/dataset/ → 404 (0.001s)
+1763333613700,"INFO:     169.254.172.3:34078 - ""GET /artifacts/dataset/ HTTP/1.1"" 404 Not Found"
+1763333614362,2025-11-16 22:53:34 | INFO     | src.api.main              | 📥 [1763333614362] GET /artifacts/model/ from 169.254.172.3
+1763333614363,2025-11-16 22:53:34 | INFO     | src.api.main              | ❌ [1763333614362] GET /artifacts/model/ → 404 (0.001s)
+1763333614363,"INFO:     169.254.172.3:34078 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333614991,2025-11-16 22:53:34 | INFO     | src.api.main              | 📥 [1763333614991] GET /artifacts/code/ from 169.254.172.3
+1763333614992,2025-11-16 22:53:34 | INFO     | src.api.main              | ❌ [1763333614991] GET /artifacts/code/ → 404 (0.000s)
+1763333614992,"INFO:     169.254.172.3:34078 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333615612,2025-11-16 22:53:35 | INFO     | src.api.main              | 📥 [1763333615612] GET /artifacts/dataset/ from 169.254.172.3
+1763333615613,2025-11-16 22:53:35 | INFO     | src.api.main              | ❌ [1763333615612] GET /artifacts/dataset/ → 404 (0.001s)
+1763333615613,"INFO:     169.254.172.3:34078 - ""GET /artifacts/dataset/ HTTP/1.1"" 404 Not Found"
+1763333616244,2025-11-16 22:53:36 | INFO     | src.api.main              | 📥 [1763333616243] GET /artifacts/model/ from 169.254.172.3
+1763333616244,2025-11-16 22:53:36 | INFO     | src.api.main              | ❌ [1763333616243] GET /artifacts/model/ → 404 (0.001s)
+1763333616244,"INFO:     169.254.172.3:34078 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333616860,2025-11-16 22:53:36 | INFO     | src.api.main              | 📥 [1763333616860] GET /artifacts/code/ from 169.254.172.3
+1763333616860,2025-11-16 22:53:36 | INFO     | src.api.main              | ❌ [1763333616860] GET /artifacts/code/ → 404 (0.000s)
+1763333616861,"INFO:     169.254.172.3:34078 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333617481,2025-11-16 22:53:37 | INFO     | src.api.main              | 📥 [1763333617481] GET /artifacts/model/2 from 169.254.172.3
+1763333617482,"2025-11-16 22:53:37 | INFO     | src.api.main              | 🔍 AUTOGRADER QUERY byId: type=model, id=2"
+1763333617483,"2025-11-16 22:53:37 | INFO     | src.api.main              |    ✅ Found: id=2, name=moondream2, type=model"
+1763333617484,2025-11-16 22:53:37 | INFO     | src.api.main              | ✅ [1763333617481] GET /artifacts/model/2 → 200 (0.002s)
+1763333617484,"INFO:     169.254.172.3:34078 - ""GET /artifacts/model/2 HTTP/1.1"" 200 OK"
+1763333618097,2025-11-16 22:53:38 | INFO     | src.api.main              | 📥 [1763333618097] GET /artifacts/code/ from 169.254.172.3
+1763333618098,2025-11-16 22:53:38 | INFO     | src.api.main              | ❌ [1763333618097] GET /artifacts/code/ → 404 (0.000s)
+1763333618098,"INFO:     169.254.172.3:34078 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333618465,2025-11-16 22:53:38 | INFO     | src.api.main              | 📥 [1763333618465] GET /api/v1/system/health from 169.254.172.3
+1763333618466,2025-11-16 22:53:38 | INFO     | src.api.main              | ✅ [1763333618465] GET /api/v1/system/health → 200 (0.001s)
+1763333618466,"INFO:     169.254.172.3:34078 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333618718,2025-11-16 22:53:38 | INFO     | src.api.main              | 📥 [1763333618718] GET /artifacts/model/ from 169.254.172.3
+1763333618718,2025-11-16 22:53:38 | INFO     | src.api.main              | ❌ [1763333618718] GET /artifacts/model/ → 404 (0.001s)
+1763333618718,"INFO:     169.254.172.3:35624 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333619334,2025-11-16 22:53:39 | INFO     | src.api.main              | 📥 [1763333619334] GET /artifacts/model/ from 169.254.172.3
+1763333619335,2025-11-16 22:53:39 | INFO     | src.api.main              | ❌ [1763333619334] GET /artifacts/model/ → 404 (0.001s)
+1763333619336,"INFO:     169.254.172.3:35624 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333619952,2025-11-16 22:53:39 | INFO     | src.api.main              | 📥 [1763333619952] GET /artifacts/code/ from 169.254.172.3
+1763333619953,2025-11-16 22:53:39 | INFO     | src.api.main              | ❌ [1763333619952] GET /artifacts/code/ → 404 (0.001s)
+1763333619953,"INFO:     169.254.172.3:35624 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333620572,2025-11-16 22:53:40 | INFO     | src.api.main              | 📥 [1763333620572] GET /artifacts/dataset/ from 169.254.172.3
+1763333620573,2025-11-16 22:53:40 | INFO     | src.api.main              | ❌ [1763333620572] GET /artifacts/dataset/ → 404 (0.001s)
+1763333620573,"INFO:     169.254.172.3:35624 - ""GET /artifacts/dataset/ HTTP/1.1"" 404 Not Found"
+1763333621194,2025-11-16 22:53:41 | INFO     | src.api.main              | 📥 [1763333621194] GET /artifacts/model/ from 169.254.172.3
+1763333621195,2025-11-16 22:53:41 | INFO     | src.api.main              | ❌ [1763333621194] GET /artifacts/model/ → 404 (0.001s)
+1763333621195,"INFO:     169.254.172.3:35624 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333621812,2025-11-16 22:53:41 | INFO     | src.api.main              | 📥 [1763333621811] GET /artifacts/code/ from 169.254.172.3
+1763333621812,2025-11-16 22:53:41 | INFO     | src.api.main              | ❌ [1763333621811] GET /artifacts/code/ → 404 (0.000s)
+1763333621812,"INFO:     169.254.172.3:35624 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333622432,2025-11-16 22:53:42 | INFO     | src.api.main              | 📥 [1763333622432] GET /artifacts/dataset/ from 169.254.172.3
+1763333622432,2025-11-16 22:53:42 | INFO     | src.api.main              | ❌ [1763333622432] GET /artifacts/dataset/ → 404 (0.001s)
+1763333622433,"INFO:     169.254.172.3:35624 - ""GET /artifacts/dataset/ HTTP/1.1"" 404 Not Found"
+1763333623057,2025-11-16 22:53:43 | INFO     | src.api.main              | 📥 [1763333623057] GET /artifacts/model/ from 169.254.172.3
+1763333623057,2025-11-16 22:53:43 | INFO     | src.api.main              | ❌ [1763333623057] GET /artifacts/model/ → 404 (0.001s)
+1763333623058,"INFO:     169.254.172.3:35624 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333623674,2025-11-16 22:53:43 | INFO     | src.api.main              | 📥 [1763333623674] GET /artifacts/code/ from 169.254.172.3
+1763333623682,2025-11-16 22:53:43 | INFO     | src.api.main              | ❌ [1763333623674] GET /artifacts/code/ → 404 (0.008s)
+1763333623682,"INFO:     169.254.172.3:35624 - ""GET /artifacts/code/ HTTP/1.1"" 404 Not Found"
+1763333624297,2025-11-16 22:53:44 | INFO     | src.api.main              | 📥 [1763333624297] GET /artifacts/model/ from 169.254.172.3
+1763333624298,2025-11-16 22:53:44 | INFO     | src.api.main              | ❌ [1763333624297] GET /artifacts/model/ → 404 (0.001s)
+1763333624298,"INFO:     169.254.172.3:35624 - ""GET /artifacts/model/ HTTP/1.1"" 404 Not Found"
+1763333624914,2025-11-16 22:53:44 | INFO     | src.api.main              | 📥 [1763333624914] GET /artifacts/model/invalidId from 169.254.172.3
+1763333624916,"2025-11-16 22:53:44 | INFO     | src.api.main              | 🔍 AUTOGRADER QUERY byId: type=model, id=invalidId"
+1763333624916,2025-11-16 22:53:44 | WARNING  | src.api.main              | ❌ INVALID ID FORMAT: invalidId
+1763333624916,"INFO:     169.254.172.3:35624 - ""GET /artifacts/model/invalidId HTTP/1.1"" 400 Bad Request"
+1763333624917,2025-11-16 22:53:44 | INFO     | src.api.main              | ❌ [1763333624914] GET /artifacts/model/invalidId → 400 (0.002s)
+1763333625038,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625038] GET /artifact/model/invalidId/rate from 169.254.172.3
+1763333625039,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625039] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625041,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625038] GET /artifact/model/invalidId/rate → 400 (0.003s)
+1763333625041,"INFO:     169.254.172.3:35624 - ""GET /artifact/model/invalidId/rate HTTP/1.1"" 400 Bad Request"
+1763333625041,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625039] GET /artifact/model/{id}/rate → 400 (0.003s)
+1763333625041,"INFO:     169.254.172.3:35626 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625044,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625044] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625045,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625045] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625047,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625047] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625049,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625044] GET /artifact/model/{id}/rate → 400 (0.005s)
+1763333625049,"INFO:     169.254.172.3:35626 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625050,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625045] GET /artifact/model/{id}/rate → 400 (0.005s)
+1763333625050,"INFO:     169.254.172.3:35624 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625050,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625047] GET /artifact/model/{id}/rate → 400 (0.004s)
+1763333625050,"INFO:     169.254.172.3:35632 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625057,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625056] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625057,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625057] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625060,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625059] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625061,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625061] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625063,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625062] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625064,2025-11-16 22:53:45 | INFO     | src.api.main              | 📥 [1763333625063] GET /artifact/model/{id}/rate from 169.254.172.3
+1763333625064,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625056] GET /artifact/model/{id}/rate → 400 (0.008s)
+1763333625065,"INFO:     169.254.172.3:35624 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625065,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625057] GET /artifact/model/{id}/rate → 400 (0.008s)
+1763333625066,"INFO:     169.254.172.3:35626 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625145,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625059] GET /artifact/model/{id}/rate → 400 (0.085s)
+1763333625145,"INFO:     169.254.172.3:35648 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625146,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625062] GET /artifact/model/{id}/rate → 400 (0.084s)
+1763333625146,"INFO:     169.254.172.3:35668 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625147,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625061] GET /artifact/model/{id}/rate → 400 (0.086s)
+1763333625147,"INFO:     169.254.172.3:35660 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333625147,2025-11-16 22:53:45 | INFO     | src.api.main              | ❌ [1763333625063] GET /artifact/model/{id}/rate → 400 (0.084s)
+1763333625148,"INFO:     169.254.172.3:35682 - ""GET /artifact/model/%7Bid%7D/rate HTTP/1.1"" 400 Bad Request"
+1763333638465,2025-11-16 22:53:58 | INFO     | src.api.main              | 📥 [1763333638465] GET /api/v1/system/health from 169.254.172.3
+1763333638467,2025-11-16 22:53:58 | INFO     | src.api.main              | ✅ [1763333638465] GET /api/v1/system/health → 200 (0.002s)
+1763333638467,"INFO:     169.254.172.3:34692 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333658473,2025-11-16 22:54:18 | INFO     | src.api.main              | 📥 [1763333658472] GET /api/v1/system/health from 169.254.172.3
+1763333658474,2025-11-16 22:54:18 | INFO     | src.api.main              | ✅ [1763333658472] GET /api/v1/system/health → 200 (0.002s)
+1763333658474,"INFO:     169.254.172.3:58416 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333678470,2025-11-16 22:54:38 | INFO     | src.api.main              | 📥 [1763333678469] GET /api/v1/system/health from 169.254.172.3
+1763333678472,2025-11-16 22:54:38 | INFO     | src.api.main              | ✅ [1763333678469] GET /api/v1/system/health → 200 (0.002s)
+1763333678472,"INFO:     169.254.172.3:50114 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333698465,2025-11-16 22:54:58 | INFO     | src.api.main              | 📥 [1763333698465] GET /api/v1/system/health from 169.254.172.3
+1763333698466,2025-11-16 22:54:58 | INFO     | src.api.main              | ✅ [1763333698465] GET /api/v1/system/health → 200 (0.001s)
+1763333698467,"INFO:     169.254.172.3:48094 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333718465,2025-11-16 22:55:18 | INFO     | src.api.main              | 📥 [1763333718465] GET /api/v1/system/health from 169.254.172.3
+1763333718467,2025-11-16 22:55:18 | INFO     | src.api.main              | ✅ [1763333718465] GET /api/v1/system/health → 200 (0.001s)
+1763333718467,"INFO:     169.254.172.3:45768 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333738466,2025-11-16 22:55:38 | INFO     | src.api.main              | 📥 [1763333738466] GET /api/v1/system/health from 169.254.172.3
+1763333738468,2025-11-16 22:55:38 | INFO     | src.api.main              | ✅ [1763333738466] GET /api/v1/system/health → 200 (0.002s)
+1763333738468,"INFO:     169.254.172.3:46098 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333758465,2025-11-16 22:55:58 | INFO     | src.api.main              | 📥 [1763333758465] GET /api/v1/system/health from 169.254.172.3
+1763333758467,2025-11-16 22:55:58 | INFO     | src.api.main              | ✅ [1763333758465] GET /api/v1/system/health → 200 (0.001s)
+1763333758467,"INFO:     169.254.172.3:50650 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
+1763333778466,2025-11-16 22:56:18 | INFO     | src.api.main              | 📥 [1763333778466] GET /api/v1/system/health from 169.254.172.3
+1763333778468,2025-11-16 22:56:18 | INFO     | src.api.main              | ✅ [1763333778466] GET /api/v1/system/health → 200 (0.002s)
+1763333778469,"INFO:     169.254.172.3:45038 - ""GET /api/v1/system/health HTTP/1.1"" 200 OK"
