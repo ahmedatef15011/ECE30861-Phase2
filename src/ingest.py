@@ -1,7 +1,7 @@
 """Model ingest module for quality gate validation.
 
 Handles validation of HuggingFace models against quality metrics.
-Models must score >= 0.5 on all core metrics to be ingestible.
+Models must have net_score >= 0.5 to be ingestible.
 """
 
 import logging
@@ -16,20 +16,9 @@ from .utils import measure_time
 
 logger = logging.getLogger(__name__)
 
-# Quality gate thresholds for ingest
-# All metrics must score >= 0.5 to pass
-# Note: reviewedness is optional (skipped if -1, i.e., no GitHub repo)
-INGEST_QUALITY_GATE_METRICS = {
-    "reproducibility": 0.5,
-    "code_quality": 0.5,
-    "license": 0.5,
-    "dataset_quality": 0.5,
-    "ramp_up_time": 0.5,
-    "bus_factor": 0.5,
-    "performance_claims": 0.5,
-    "dataset_and_code_score": 0.5,
-    "reviewedness": 0.5,  # Optional: skipped if no GitHub repo
-}
+# Quality gate threshold for ingest
+# Net score must be >= 0.5 to pass
+INGEST_NET_SCORE_THRESHOLD = 0.5
 
 
 class IngestValidator:
@@ -122,8 +111,7 @@ class IngestValidator:
         """
         Apply quality gate check to audit results.
 
-        All metrics in INGEST_QUALITY_GATE_METRICS must be >= 0.5
-        Metrics with score -1 are skipped (not applicable, e.g., no GitHub)
+        Net score must be >= 0.5 to pass the quality gate.
 
         Args:
             audit_result: Scoring results from MetricScorer
@@ -132,35 +120,19 @@ class IngestValidator:
             Tuple of (passes_gate, failing_metrics_list)
         """
         failing_metrics = []
+        net_score = audit_result.net_score
 
-        # Check each metric against threshold
-        for metric_name, threshold in INGEST_QUALITY_GATE_METRICS.items():
-            score = getattr(audit_result, metric_name, None)
-
-            if score is None:
-                logger.warning(f"Metric {metric_name} not found in result")
-                failing_metrics.append({
-                    "metric": metric_name,
-                    "score": None,
-                    "required": threshold,
-                    "reason": "Metric not available"
-                })
-            elif score == -1:
-                # Skip metrics that are not applicable (e.g., no GitHub repo)
-                logger.debug(
-                    f"Skipping {metric_name}: not applicable (score=-1)"
-                )
-                continue
-            elif isinstance(score, float) and score < threshold:
-                failing_metrics.append({
-                    "metric": metric_name,
-                    "score": round(score, 3),
-                    "required": threshold,
-                    "gap": round(score - threshold, 3)
-                })
-                logger.debug(
-                    f"Metric {metric_name} failed: {score} < {threshold}"
-                )
+        # Check net score against threshold
+        if net_score < INGEST_NET_SCORE_THRESHOLD:
+            failing_metrics.append({
+                "metric": "net_score",
+                "score": round(net_score, 3),
+                "required": INGEST_NET_SCORE_THRESHOLD,
+                "gap": round(net_score - INGEST_NET_SCORE_THRESHOLD, 3)
+            })
+            logger.debug(
+                f"Net score failed: {net_score} < {INGEST_NET_SCORE_THRESHOLD}"
+            )
 
         # Passes if no failing metrics
         passes = len(failing_metrics) == 0
@@ -179,8 +151,20 @@ class IngestValidator:
         """
         scores = {}
 
-        # Extract all non-latency fields
-        for metric_name in INGEST_QUALITY_GATE_METRICS.keys():
+        # Extract all metric scores
+        metric_names = [
+            "reproducibility",
+            "code_quality",
+            "license",
+            "dataset_quality",
+            "ramp_up_time",
+            "bus_factor",
+            "performance_claims",
+            "dataset_and_code_score",
+            "reviewedness"
+        ]
+        
+        for metric_name in metric_names:
             score = getattr(audit_result, metric_name, None)
             if score is not None:
                 scores[metric_name] = round(score, 3)
