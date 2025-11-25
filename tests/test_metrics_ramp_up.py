@@ -46,7 +46,7 @@ def test_metric_name(ramp_up_metric):
 
 def test_compute_no_readme(ramp_up_metric, model_context, config):
     """Test computation with no README."""
-    result = await ramp_up_metric.compute(model_context, config)
+    result = ramp_up_metric.compute(model_context, config)
 
     assert result.score == 0.1  # Low score for missing README
     assert result.latency >= 0
@@ -67,7 +67,7 @@ def test_compute_with_readme(ramp_up_metric, model_context, config):
     ```
     """
 
-    result = await ramp_up_metric.compute(model_context, config)
+    result = ramp_up_metric.compute(model_context, config)
 
     assert result.score > 0.1  # Should get higher score
     assert result.latency >= 0
@@ -99,7 +99,7 @@ def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
         * 10
     )  # Make it long
 
-    result = await ramp_up_metric.compute(model_context, config)
+    result = ramp_up_metric.compute(model_context, config)
 
     assert result.score > 0.7  # Should get high score
     assert result.latency >= 0

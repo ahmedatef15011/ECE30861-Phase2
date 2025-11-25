@@ -77,7 +77,7 @@ class TestReviewednessMetric:
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that models without GitHub repos return -1."""
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_without_github, {}
         )
 
@@ -99,7 +99,7 @@ class TestReviewednessMetric:
         )
         context = ModelContext(model_url=model_url, code_repos=[])
 
-        result = await reviewedness_metric.compute(context, {})
+        result = reviewedness_metric.compute(context, {})
 
         assert result.score == -1.0
 
@@ -115,7 +115,7 @@ class TestReviewednessMetric:
         mock_instance.cleanup = Mock()
         mock_git_inspector.return_value = mock_instance
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -149,7 +149,7 @@ def456|PR #2: Add feature
         mock_result.stdout = git_output
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -185,7 +185,7 @@ def456|Update code
         mock_result.stdout = git_output
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -218,7 +218,7 @@ def456|Direct commit
         mock_result.stdout = git_output
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -253,7 +253,7 @@ def456|Direct commit
         mock_result.stdout = git_output
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -296,7 +296,7 @@ mno345|Direct commit no PR
         mock_result.stdout = git_output
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -324,7 +324,7 @@ mno345|Direct commit no PR
             cmd="git log", timeout=60
         )
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -350,7 +350,7 @@ mno345|Direct commit no PR
         mock_result.stderr = "fatal: not a git repository"
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -376,7 +376,7 @@ mno345|Direct commit no PR
         mock_result.stdout = ""
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -406,7 +406,7 @@ mno345|Direct commit no PR
         mock_result.stdout = git_output
         mock_subprocess.return_value = mock_result
 
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_with_github, {}
         )
 
@@ -495,7 +495,7 @@ mno345|Direct commit no PR
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that compute returns MetricResult object."""
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_without_github, {}
         )
 
@@ -509,7 +509,7 @@ mno345|Direct commit no PR
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that score is always in valid range."""
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_without_github, {}
         )
 
@@ -519,7 +519,7 @@ mno345|Direct commit no PR
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that latency is always positive."""
-        result = await reviewedness_metric.compute(
+        result = reviewedness_metric.compute(
             model_context_without_github, {}
         )
 

@@ -72,7 +72,7 @@ def test_enrich_context(temp_config, model_context):
     scorer.hf_api.get_readme_content = AsyncMock(return_value="# Test README")
     scorer.hf_api.get_model_config = AsyncMock(return_value={"config.json": {}})
 
-    await scorer._enrich_context(model_context)
+    scorer._enrich_context(model_context)
 
     assert model_context.hf_info == {"id": "test/model"}
     assert model_context.readme_content == "# Test README"
