@@ -1,4 +1,3 @@
-```python
 """SQLAlchemy database models for ML Model Registry."""
 
 from datetime import datetime
