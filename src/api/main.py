@@ -812,7 +812,27 @@ def create_app() -> FastAPI:
         # Create package entry FIRST (before quality gate validation)
         # This ensures we track ALL submission attempts
         logger.info(f"📝 Creating package entry for {artifact_name}...")
+        # Get artifact ID
         artifact_id = str(uuid.uuid4())
+        
+        # Get file size from HuggingFace if available
+        file_size_bytes = 0
+        try:
+            from huggingface_hub import HfApi
+            hf_api_client = HfApi()
+            # Use files_metadata=True to get actual file sizes
+            model_info = hf_api_client.model_info(full_model_name, files_metadata=True)
+            
+            if hasattr(model_info, 'siblings') and model_info.siblings:
+                total_size = sum(
+                    getattr(sibling, 'size', 0) or 0
+                    for sibling in model_info.siblings
+                )
+                file_size_bytes = total_size
+                logger.info(f"📊 Calculated size: {file_size_bytes} bytes ({file_size_bytes / (1024*1024):.1f} MB)")
+        except Exception as e:
+            logger.warning(f"Could not get file size from HuggingFace: {e}")
+            file_size_bytes = 0
         
         from src.database import crud
         package = crud.create_package(
@@ -822,7 +842,7 @@ def create_app() -> FastAPI:
             artifact_type=artifact_type,
             s3_key=artifact_id,
             s3_bucket="",
-            file_size_bytes=0,
+            file_size_bytes=file_size_bytes,
             source_url=url,
             uploaded_by=1,  # Default admin user
             ingest_status="pending"  # Mark as pending evaluation
