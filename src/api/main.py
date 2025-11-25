@@ -837,7 +837,7 @@ def create_app() -> FastAPI:
         
         # Now run quality gate validation
         logger.info(f"   Validating {full_model_name}...") 
-        passes_gate, validation_result = await validate_and_ingest(
+        passes_gate, validation_result = validate_and_ingest(
             full_model_name
         )
         
