@@ -12,16 +12,16 @@ class CodeQualityMetric(BaseMetric):
     def name(self) -> str:
         return "code_quality"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         # compute code quality score
         with measure_time() as get_latency:
-            score = await self._calculate_code_quality_score(context, config)
+            score = self._calculate_code_quality_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_code_quality_score(
+    def _calculate_code_quality_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """Calculate code quality using lints, tests folder, and CI config."""

@@ -1,6 +1,5 @@
 """Reviewedness metric: fraction of code introduced through reviewed PRs."""
 
-import asyncio
 import re
 import subprocess
 from pathlib import Path
@@ -41,7 +40,7 @@ class ReviewednessMetric(BaseMetric):
     def name(self) -> str:
         return "reviewedness"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """Compute reviewedness score.
@@ -52,9 +51,8 @@ class ReviewednessMetric(BaseMetric):
             - -1.0: no GitHub repository linked
         """
         with measure_time() as get_latency:
-            # Run blocking git operations in thread pool for true parallelism
-            score = await asyncio.to_thread(
-                self._calculate_reviewedness_score_sync,
+            # Call synchronous implementation directly
+            score = self._calculate_reviewedness_score_sync(
                 context,
                 config
             )

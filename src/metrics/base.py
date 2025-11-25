@@ -13,7 +13,7 @@ class BaseMetric(ABC):
         pass
 
     @abstractmethod
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """

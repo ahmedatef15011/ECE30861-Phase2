@@ -13,16 +13,16 @@ class BusFactorMetric(BaseMetric):
     def name(self) -> str:
         return "bus_factor"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         # compute bus factor score based on contributor analysis
         with measure_time() as get_latency:
-            score = await self._calculate_bus_factor_score(context, config)
+            score = self._calculate_bus_factor_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_bus_factor_score(
+    def _calculate_bus_factor_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """Calculate bus factor from unique commit authors.

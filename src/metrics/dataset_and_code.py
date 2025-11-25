@@ -12,16 +12,16 @@ class DatasetAndCodeScoreMetric(BaseMetric):
     def name(self) -> str:
         return "dataset_and_code_score"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """Compute dataset and code linkage score."""
         with measure_time() as get_latency:
-            score = await self._calculate_dataset_code_score(context, config)
+            score = self._calculate_dataset_code_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_dataset_code_score(
+    def _calculate_dataset_code_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """Calculate score based on dataset link and example train/test code.

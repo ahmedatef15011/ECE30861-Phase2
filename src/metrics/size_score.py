@@ -12,12 +12,12 @@ class SizeScoreMetric(BaseMetric):
     def name(self) -> str:
         return "size_score"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         # compute size score for different hardware targets
         with measure_time() as get_latency:
-            size_score = await self._calculate_size_scores(context, config)
+            size_score = self._calculate_size_scores(context, config)
         
         # calculate average score across all devices
         avg_score = (
@@ -33,11 +33,11 @@ class SizeScoreMetric(BaseMetric):
             latency=get_latency()
         )
 
-    async def _calculate_size_scores(
+    def _calculate_size_scores(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> SizeScore:
         # estimate model size from various sources
-        estimated_size_gb = await self._estimate_model_size(context)
+        estimated_size_gb = self._estimate_model_size(context)
 
         # get thresholds from config, with fallbacks
         size_limits = config.get("thresholds", {}).get("size_limits", {})
@@ -72,7 +72,7 @@ class SizeScoreMetric(BaseMetric):
         score = 1.0 / (1.0 + math.pow(ratio, softness))
         return round(score, 3)
 
-    async def _estimate_model_size(self, context: ModelContext) -> float:
+    def _estimate_model_size(self, context: ModelContext) -> float:
         """Estimate model size from various sources."""
         
         # try using existing utility function

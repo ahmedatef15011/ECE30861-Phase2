@@ -82,7 +82,7 @@ class ReproducibilityMetric(BaseMetric):
         """Get model ID from context."""
         return context.model_url.name
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """
@@ -96,11 +96,11 @@ class ReproducibilityMetric(BaseMetric):
             MetricResult with score and latency
         """
         with measure_time() as get_latency:
-            score = await self._calculate_reproducibility_score(context, config)
+            score = self._calculate_reproducibility_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_reproducibility_score(
+    def _calculate_reproducibility_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """
@@ -553,7 +553,7 @@ except Exception as e:
         
         return fixed_code
 
-    async def get_reproducibility_details(
+    def get_reproducibility_details(
         self, 
         context: ModelContext
     ) -> Dict[str, Any]:
@@ -590,7 +590,7 @@ except Exception as e:
             )
             
             # Calculate score
-            score = await self._calculate_reproducibility_score(
+            score = self._calculate_reproducibility_score(
                 context, 
                 {}
             )

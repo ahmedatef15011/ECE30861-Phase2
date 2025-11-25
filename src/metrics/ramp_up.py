@@ -12,16 +12,16 @@ class RampUpTimeMetric(BaseMetric):
     def name(self) -> str:
         return "ramp_up_time"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """Compute ramp-up time score based on documentation quality."""
         with measure_time() as get_latency:
-            score = await self._calculate_ramp_up_score(context, config)
+            score = self._calculate_ramp_up_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_ramp_up_score(
+    def _calculate_ramp_up_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """Calculate ramp-up score based on 4 specific criteria."""

@@ -12,16 +12,16 @@ class LicenseScoreMetric(BaseMetric):
     def name(self) -> str:
         return "license"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """Compute license score."""
         with measure_time() as get_latency:
-            score = await self._calculate_license_score(context, config)
+            score = self._calculate_license_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_license_score(
+    def _calculate_license_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """Calculate license score based on exact specification mapping."""

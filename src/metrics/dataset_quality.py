@@ -13,16 +13,16 @@ class DatasetQualityMetric(BaseMetric):
     def name(self) -> str:
         return "dataset_quality"
 
-    async def compute(
+    def compute(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> MetricResult:
         """Compute dataset quality score."""
         with measure_time() as get_latency:
-            score = await self._calculate_dataset_quality_score(context, config)
+            score = self._calculate_dataset_quality_score(context, config)
 
         return MetricResult(score=score, latency=get_latency())
 
-    async def _calculate_dataset_quality_score(
+    def _calculate_dataset_quality_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
         """Calculate dataset quality.
@@ -44,7 +44,7 @@ class DatasetQualityMetric(BaseMetric):
 
         for dataset_url in context.datasets:
             if dataset_url.platform == "huggingface":
-                dataset_score = await self._analyze_hf_dataset_quality(
+                dataset_score = self._analyze_hf_dataset_quality(
                     dataset_url, hf_api
                 )
                 total_score += dataset_score
@@ -59,17 +59,17 @@ class DatasetQualityMetric(BaseMetric):
 
         return total_score / datasets_analyzed
 
-    async def _analyze_hf_dataset_quality(
+    def _analyze_hf_dataset_quality(
         self, dataset_url, hf_api: HuggingFaceAPI
     ) -> float:
         """Analyze a HF dataset for description, size/#samples, license, benchmarks."""
         # get dataset README
-        readme_content = await hf_api.get_readme_content(dataset_url)
+        readme_content = hf_api.get_readme_content(dataset_url)
         if not readme_content:
             return 0.0 
 
         # get dataset info from API
-        dataset_info = await hf_api.get_dataset_info(dataset_url)
+        dataset_info = hf_api.get_dataset_info(dataset_url)
 
         return self._analyze_dataset_content(readme_content, dataset_info)
 
