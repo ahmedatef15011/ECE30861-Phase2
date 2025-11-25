@@ -1825,13 +1825,22 @@ def create_app() -> FastAPI:
         # If dependency=true, double the cost (simple approximation)
         total_cost = standalone_cost * 2.0 if dependency else standalone_cost
         
-        # Build cost response - always include both fields
-        result = {
-            id: {
-                "standalone_cost": float(round(standalone_cost, 2)),
-                "total_cost": float(round(total_cost, 2))
+        # Build cost response per OpenAPI spec:
+        # - When dependency=false: only include total_cost
+        # - When dependency=true: include both standalone_cost and total_cost
+        if dependency:
+            result = {
+                id: {
+                    "standalone_cost": float(round(standalone_cost, 2)),
+                    "total_cost": float(round(total_cost, 2))
+                }
             }
-        }
+        else:
+            result = {
+                id: {
+                    "total_cost": float(round(total_cost, 2))
+                }
+            }
         logger.info(f"   📦 Response: {result}")
         
         logger.info(f"✅ COST: {standalone_cost} MB (total: {total_cost} MB) → returning {result}")
