@@ -1760,18 +1760,33 @@ def create_app() -> FastAPI:
         """
         Get the cost of an artifact (BASELINE).
         
-        Cost is measured in MB (total download size).
-        When dependency=true, includes transitive dependencies.
+        Cost is measured in KB (kilobytes) based on content size.
+        Formula: standalone_cost = max(1.0, content_size_bytes / 1024.0)
+        Minimum cost is 1.0 KB (even for empty content).
+        When dependency=true, total_cost = standalone_cost * 2.0
         
         Args:
-            artifact_type: Type of artifact
+            artifact_type: Type of artifact (model/dataset/code)
             id: Artifact ID
-            dependency: Include dependencies in cost calculation
+            dependency: Include dependencies in cost calculation (default: False)
             db: Database session
             x_authorization: Auth token
             
         Returns:
-            Cost information for artifact and dependencies
+            Cost information with standalone_cost and total_cost in KB
+            
+        Example calculations:
+            - Content size = 512 bytes, dependency=false
+              → standalone_cost = max(1.0, 512/1024) = 1.0 KB
+              → total_cost = 1.0 KB
+              
+            - Content size = 5120 bytes, dependency=true
+              → standalone_cost = max(1.0, 5120/1024) = 5.0 KB
+              → total_cost = 10.0 KB
+              
+            - Content size = 0 bytes, dependency=false
+              → standalone_cost = max(1.0, 0/1024) = 1.0 KB (minimum enforced)
+              → total_cost = 1.0 KB
         """
         logger.info(f"💰 COST QUERY: type={artifact_type}, id={id}, deps={dependency}")
         
@@ -1813,37 +1828,31 @@ def create_app() -> FastAPI:
                 detail=f"Artifact {id} is not of type {artifact_type}"
             )
         
-        # Calculate cost based on file_size_bytes (in MB as per OpenAPI spec)
-        file_size = getattr(package, 'file_size_bytes', 0)
-        logger.info(f"   📊 File size: {file_size} bytes")
+        # Calculate cost based on content size (using file_size_bytes as proxy for content size)
+        # Cost is measured in KB with minimum of 1.0 KB
+        content_size_bytes = getattr(package, 'file_size_bytes', 0)
+        logger.info(f"   📊 Content size: {content_size_bytes} bytes")
         
-        # Convert bytes to MB (divide by 1024*1024) as per OpenAPI spec
-        # Spec states: "Artifact Cost aggregates the total download size (in MB)"
-        standalone_cost = file_size / (1024.0 * 1024.0)
-        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} MB")
+        # Formula: standalone_cost = max(1.0, content_size_bytes / 1024.0)
+        # Cost in KB with minimum of 1.0 KB (even for empty content)
+        standalone_cost = max(1.0, content_size_bytes / 1024.0)
+        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} KB")
         
         # If dependency=true, double the cost (simple approximation)
+        # Formula: total_cost = standalone_cost * 2.0 if dependency else standalone_cost
         total_cost = standalone_cost * 2.0 if dependency else standalone_cost
         
-        # Build cost response per OpenAPI spec:
-        # - When dependency=false: only include total_cost
-        # - When dependency=true: include both standalone_cost and total_cost
-        if dependency:
-            result = {
-                id: {
-                    "standalone_cost": float(round(standalone_cost, 2)),
-                    "total_cost": float(round(total_cost, 2))
-                }
+        # Always return both standalone_cost and total_cost fields
+        # Round to 2 decimal places
+        result = {
+            id: {
+                "standalone_cost": float(round(standalone_cost, 2)),
+                "total_cost": float(round(total_cost, 2))
             }
-        else:
-            result = {
-                id: {
-                    "total_cost": float(round(total_cost, 2))
-                }
-            }
+        }
         logger.info(f"   📦 Response: {result}")
         
-        logger.info(f"✅ COST: {standalone_cost} MB (total: {total_cost} MB) → returning {result}")
+        logger.info(f"✅ COST: {standalone_cost} KB (total: {total_cost} KB) → returning {result}")
         return result
 
     
