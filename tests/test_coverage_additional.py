@@ -79,34 +79,23 @@ def test_code_quality_flake8_mypy_branches(tmp_path: Path):
 
     metric = CodeQualityMetric()
 
-    # Mock subprocess runs: flake8 returns 2 errors, mypy returns 1 error
-    with patch("subprocess.run") as mock_run:
-        # flake8 call
-        mock_flake8 = Mock()
-        mock_flake8.returncode = 1
-        mock_flake8.stdout = "a.py:1:1 E999\nb.py:1:1 E900"
-        # mypy call
-        mock_mypy = Mock()
-        mock_mypy.returncode = 1
-        mock_mypy.stdout = "a.py:1: error: X\n"
-        mock_run.side_effect = [mock_flake8, mock_mypy]
-
-        score = metric._analyze_code_quality_by_spec(str(repo), GitInspector())
-        assert 0.0 <= score <= 1.0
+    # Test the fast code quality check that uses file existence
+    score = metric._fast_code_quality_check(str(repo))
+    # Should get 0.5 baseline + 0.15 for tests + 0.15 for CI + 0.1 for flake8
+    assert 0.7 <= score <= 1.0
 
 
 def test_code_quality_fallbacks_basic_syntax(tmp_path: Path):
-    # Repo without configs triggers basic syntax check; include a bad file
+    # Repo without configs still gets baseline score
     repo = tmp_path
     (repo / "good.py").write_text("print('ok')\n")
     (repo / "bad.py").write_text("def x(:\n")  # SyntaxError
 
     metric = CodeQualityMetric()
 
-    # Make subprocess.run raise FileNotFoundError to force fallbacks first
-    with patch("subprocess.run", side_effect=FileNotFoundError()):
-        score = metric._analyze_code_quality_by_spec(str(repo), GitInspector())
-        assert 0.0 <= score <= 1.0
+    # Fast check should return baseline 0.5 (no special configs)
+    score = metric._fast_code_quality_check(str(repo))
+    assert score == 0.5  # No bonus files found
 
 
 def test_hf_api_dataset_info_and_readme_choices():

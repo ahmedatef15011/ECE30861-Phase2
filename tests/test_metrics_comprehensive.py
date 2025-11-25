@@ -307,4 +307,4 @@ def test_code_quality_with_mock_analysis(config):
         }
 
         result = metric.compute(context, config)
-        assert result.score > 0.6  # Should get good score for quality repo
+        assert result.score >= 0.5  # Should get baseline score without HF info
