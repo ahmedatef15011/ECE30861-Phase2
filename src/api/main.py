@@ -819,19 +819,48 @@ def create_app() -> FastAPI:
         file_size_bytes = 0
         try:
             from huggingface_hub import HfApi
-            hf_api_client = HfApi()
-            # Use files_metadata=True to get actual file sizes
-            model_info = hf_api_client.model_info(full_model_name, files_metadata=True)
             
-            if hasattr(model_info, 'siblings') and model_info.siblings:
-                total_size = sum(
-                    getattr(sibling, 'size', 0) or 0
-                    for sibling in model_info.siblings
-                )
-                file_size_bytes = total_size
-                logger.info(f"📊 Calculated size: {file_size_bytes} bytes ({file_size_bytes / (1024*1024):.1f} MB)")
+            # Only fetch size for HuggingFace artifacts (models and datasets)
+            if artifact_type in ["model", "dataset"]:
+                hf_api_client = HfApi()
+                
+                if artifact_type == "model":
+                    # Use model_info for models
+                    model_info = hf_api_client.model_info(full_model_name, files_metadata=True)
+                    
+                    if hasattr(model_info, 'siblings') and model_info.siblings:
+                        total_size = sum(
+                            getattr(sibling, 'size', 0) or 0
+                            for sibling in model_info.siblings
+                        )
+                        file_size_bytes = total_size
+                        logger.info(f"📊 Calculated size: {file_size_bytes} bytes ({file_size_bytes / (1024*1024):.1f} MB)")
+                
+                elif artifact_type == "dataset":
+                    # Use dataset_info for datasets
+                    dataset_info = hf_api_client.dataset_info(full_model_name, files_metadata=True)
+                    
+                    if hasattr(dataset_info, 'siblings') and dataset_info.siblings:
+                        total_size = sum(
+                            getattr(sibling, 'size', 0) or 0
+                            for sibling in dataset_info.siblings
+                        )
+                        file_size_bytes = total_size
+                        logger.info(f"📊 Calculated dataset size: {file_size_bytes} bytes ({file_size_bytes / (1024*1024):.1f} MB)")
+            
+            else:
+                # For code artifacts (GitHub repos), we can't easily get size without cloning
+                # Set to 0 for now - could implement GitHub API call in future
+                logger.info(f"📊 Code artifact - size calculation not implemented, using 0")
+                file_size_bytes = 0
+                
         except Exception as e:
-            logger.warning(f"Could not get file size from HuggingFace: {e}")
+            # Handle 401 errors and other failures gracefully
+            error_msg = str(e)
+            if "401" in error_msg or "authentication" in error_msg.lower():
+                logger.warning(f"⚠️  HuggingFace authentication error - file size will be 0. Consider setting HF_TOKEN.")
+            else:
+                logger.warning(f"Could not get file size from HuggingFace: {e}")
             file_size_bytes = 0
         
         from src.database import crud
