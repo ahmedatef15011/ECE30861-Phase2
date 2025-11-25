@@ -2,7 +2,7 @@
 
 import pytest
 import json
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, Mock, patch
 from pathlib import Path
 
 from src.ingest import (

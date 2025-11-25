@@ -4,7 +4,7 @@ Integration tests for the complete system.
 
 import os
 import tempfile
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, Mock, patch
 
 import pytest
 
@@ -42,24 +42,24 @@ def test_full_scoring_pipeline():
     scorer = MetricScorer()
 
     # Mock HF API calls
-    scorer.hf_api.get_model_info = AsyncMock(
+    scorer.hf_api.get_model_info = Mock(
         return_value={"id": "test/model", "downloads": 100}
     )
-    scorer.hf_api.get_readme_content = AsyncMock(
+    scorer.hf_api.get_readme_content = Mock(
         return_value="# Test Model\n## Usage\nExample usage"
     )
-    scorer.hf_api.get_model_config = AsyncMock(return_value=None)
+    scorer.hf_api.get_model_config = Mock(return_value=None)
 
     # Mock metric computations
     for metric in scorer.metrics:
         if metric.name == "size_score":
-            metric._calculate_size_scores = AsyncMock(
+            metric._calculate_size_scores = Mock(
                 return_value=SizeScore(
                     raspberry_pi=0.5, jetson_nano=0.7, desktop_pc=0.9, aws_server=1.0
                 )
             )
         else:
-            metric.compute = AsyncMock(
+            metric.compute = Mock(
                 return_value=MetricResult(score=0.7, latency=100)
             )
 
@@ -167,11 +167,11 @@ def test_error_handling_graceful():
 
     def test_error_resilience():
         # Mock to raise errors
-        scorer.hf_api.get_model_info = AsyncMock(side_effect=Exception("API Error"))
-        scorer.hf_api.get_readme_content = AsyncMock(
+        scorer.hf_api.get_model_info = Mock(side_effect=Exception("API Error"))
+        scorer.hf_api.get_readme_content = Mock(
             side_effect=Exception("README Error")
         )
-        scorer.hf_api.get_model_config = AsyncMock(
+        scorer.hf_api.get_model_config = Mock(
             side_effect=Exception("Config Error")
         )
 
@@ -185,4 +185,4 @@ def test_error_handling_graceful():
             assert "API Error" in str(e) or "README Error" in str(e)
 
     # This test ensures error handling doesn't completely break the system
-    asyncio.run(test_error_resilience())
+    test_error_resilience()

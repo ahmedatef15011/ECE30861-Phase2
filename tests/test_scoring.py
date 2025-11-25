@@ -1,5 +1,5 @@
 import tempfile
-from unittest.mock import AsyncMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 import yaml
@@ -68,9 +68,9 @@ def test_scorer_init_hf_api(mock_hf_api, temp_config):
 def test_enrich_context(temp_config, model_context):
     scorer = MetricScorer(temp_config)
 
-    scorer.hf_api.get_model_info = AsyncMock(return_value={"id": "test/model"})
-    scorer.hf_api.get_readme_content = AsyncMock(return_value="# Test README")
-    scorer.hf_api.get_model_config = AsyncMock(return_value={"config.json": {}})
+    scorer.hf_api.get_model_info = Mock(return_value={"id": "test/model"})
+    scorer.hf_api.get_readme_content = Mock(return_value="# Test README")
+    scorer.hf_api.get_model_config = Mock(return_value={"config.json": {}})
 
     scorer._enrich_context(model_context)
 
@@ -103,13 +103,13 @@ def test_calculate_net_score(temp_config):
 def test_score_model_integration(temp_config, model_context):
     scorer = MetricScorer(temp_config)
 
-    scorer.hf_api.get_model_info = AsyncMock(return_value={"id": "test/model"})
-    scorer.hf_api.get_readme_content = AsyncMock(return_value="# Test README")
-    scorer.hf_api.get_model_config = AsyncMock(return_value=None)
+    scorer.hf_api.get_model_info = Mock(return_value={"id": "test/model"})
+    scorer.hf_api.get_readme_content = Mock(return_value="# Test README")
+    scorer.hf_api.get_model_config = Mock(return_value=None)
 
     for metric in scorer.metrics:
         if metric.name == "size_score":
-            scorer._compute_size_metric_with_latency = AsyncMock(
+            scorer._compute_size_metric_with_latency = Mock(
                 return_value=(
                     SizeScore(
                         raspberry_pi=0.5,
@@ -121,7 +121,7 @@ def test_score_model_integration(temp_config, model_context):
                 )
             )
         else:
-            metric.compute = AsyncMock(
+            metric.compute = Mock(
                 return_value=MetricResult(score=0.7, latency=100)
             )
 

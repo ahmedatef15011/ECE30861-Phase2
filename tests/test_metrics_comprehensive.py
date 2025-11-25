@@ -2,7 +2,7 @@
 Comprehensive tests for all metrics to improve coverage.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -231,7 +231,7 @@ def test_dataset_quality_with_mock_hf_dataset(config):
     # Mock the HF API call
     with patch("src.metrics.dataset_quality.HuggingFaceAPI") as MockAPI:
         mock_api_instance = MockAPI.return_value
-        mock_api_instance.get_readme_content = AsyncMock(
+        mock_api_instance.get_readme_content = Mock(
             return_value="""
         # Dataset Description
         This dataset contains text samples.
@@ -243,7 +243,7 @@ def test_dataset_quality_with_mock_hf_dataset(config):
         Train/test/validation splits available.
         """
         )
-        mock_api_instance.get_dataset_info = AsyncMock(
+        mock_api_instance.get_dataset_info = Mock(
             return_value={"tags": ["license:apache-2.0"]}
         )
 

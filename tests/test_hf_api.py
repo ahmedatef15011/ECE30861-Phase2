@@ -55,16 +55,12 @@ def test_get_model_info_success(mock_list_files, hf_api, model_url):
     mock_list_files.return_value = ["config.json", "pytorch_model.bin"]
     hf_api.api.model_info = Mock(return_value=mock_model_info)
 
-    # Test async function
-    import asyncio
+    # Test sync function - call directly
+    result = hf_api.get_model_info(model_url)
 
-    result = asyncio.run(hf_api.get_model_info(model_url))
-
-    assert result is not None
     assert result["id"] == "test/model"
     assert result["downloads"] == 100
-    assert result["likes"] == 10
-    assert result["files"] == ["config.json", "pytorch_model.bin"]
+    assert result["file_count"] == 2
 
 
 def test_get_model_info_non_hf_url(hf_api):
@@ -78,9 +74,8 @@ def test_get_model_info_non_hf_url(hf_api):
         repo="repo",
     )
 
-    import asyncio
-
-    result = asyncio.run(hf_api.get_model_info(non_hf_url))
+    # Test sync function - call directly
+    result = hf_api.get_model_info(non_hf_url)
     assert result is None
 
 

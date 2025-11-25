@@ -4,7 +4,7 @@ Comprehensive system-level tests to improve coverage.
 
 import os
 import tempfile
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, Mock, patch
 
 import pytest
 
@@ -243,14 +243,14 @@ def test_model_context_enrichment():
     )
 
     # Mock API methods
-    scorer.hf_api.get_model_info = AsyncMock(return_value={"id": "test/model"})
-    scorer.hf_api.get_readme_content = AsyncMock(return_value="# README")
-    scorer.hf_api.get_model_config = AsyncMock(return_value={"config.json": {}})
+    scorer.hf_api.get_model_info = Mock(return_value={"id": "test/model"})
+    scorer.hf_api.get_readme_content = Mock(return_value="# README")
+    scorer.hf_api.get_model_config = Mock(return_value={"config.json": {}})
 
     # Test enrichment
     import asyncio
 
-    asyncio.run(scorer._enrich_context(context))
+    scorer._enrich_context(context)
 
     assert context.hf_info == {"id": "test/model"}
     assert context.readme_content == "# README"
