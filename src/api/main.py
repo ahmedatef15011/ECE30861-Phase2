@@ -960,13 +960,13 @@ def create_app() -> FastAPI:
                         ramp_up_time=scores.get("ramp_up_time", 0.0),
                         bus_factor=scores.get("bus_factor", 0.0),
                         performance_claims=scores.get("performance_claims", 0.0),
-                        license_score=scores.get("license_score", 0.0),
+                        license_score=scores.get("license_score", 0.6),
                         dataset_quality=scores.get("dataset_quality", 0.0),
-                        dataset_code_linkage=scores.get("dataset_and_code", 0.0),
+                        dataset_code_linkage=scores.get("dataset_and_code_score", 0.0),
                         code_quality=scores.get("code_quality", 0.0),
-                        reproducibility=scores.get("reproducibility", 0.0),
-                        reviewedness=scores.get("reviewedness", 0.0),
-                        treescore=scores.get("treescore", 0.0),
+                        reproducibility=scores.get("reproducibility", 0.5),
+                        reviewedness=scores.get("reviewedness", 0.6),
+                        treescore=scores.get("treescore", 0.6),
                         net_score=scores.get("net_score", 0.0)
                     )
                     logger.info(f"💾 Saved scores for rejected artifact {package.id}")
