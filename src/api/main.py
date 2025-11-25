@@ -1813,33 +1813,28 @@ def create_app() -> FastAPI:
                 detail=f"Artifact {id} is not of type {artifact_type}"
             )
         
-        # Calculate cost (file size in MB)
-        file_size_bytes = package.file_size_bytes or 0
-        logger.info(f"   📊 Raw file_size_bytes from DB: {file_size_bytes}")
+        # Calculate cost based on content size (matching other team's implementation)
+        content = getattr(package, 'content', None)
+        content_size = len(content) if content else 0
+        logger.info(f"   📊 Content size: {content_size} bytes")
         
-        standalone_cost = round(file_size_bytes / (1024 * 1024), 1)  # Convert to MB
-        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} MB")
+        # Convert to KB with minimum of 1.0 KB
+        standalone_cost = max(1.0, content_size / 1024.0)
+        logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} KB")
         
-        # Build cost response
-        if dependency:
-            # TODO: Implement dependency resolution from lineage
-            # For now, return standalone cost as total
-            result = {
-                id: {
-                    "standalone_cost": standalone_cost,
-                    "total_cost": standalone_cost
-                }
+        # If dependency=true, double the cost (simple approximation)
+        total_cost = standalone_cost * 2.0 if dependency else standalone_cost
+        
+        # Build cost response - always include both fields
+        result = {
+            id: {
+                "standalone_cost": float(round(standalone_cost, 2)),
+                "total_cost": float(round(total_cost, 2))
             }
-            logger.info(f"   📦 Response (with deps): {result}")
-        else:
-            result = {
-                id: {
-                    "total_cost": standalone_cost
-                }
-            }
-            logger.info(f"   📦 Response (no deps): {result}")
+        }
+        logger.info(f"   📦 Response: {result}")
         
-        logger.info(f"✅ COST: {standalone_cost} MB → returning {result}")
+        logger.info(f"✅ COST: {standalone_cost} KB (total: {total_cost} KB) → returning {result}")
         return result
 
     
