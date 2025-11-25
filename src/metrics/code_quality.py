@@ -24,155 +24,76 @@ class CodeQualityMetric(BaseMetric):
     def _calculate_code_quality_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
-        """Calculate code quality using lints, tests folder, and CI config."""
+        """Calculate code quality using fast heuristics.
+        
+        Avoids slow linting tools - uses structure analysis instead.
+        """
+        # First: try to estimate from HF metadata (fastest path)
+        if context.hf_info:
+            github_url = context.hf_info.get("github_url")
+            file_count = context.hf_info.get("file_count", 0)
+            
+            # If model has linked GitHub + reasonable file count, assume quality
+            if github_url and file_count > 5:
+                return 0.7  # Good baseline for linked code
+            elif file_count > 10:
+                return 0.6  # Has files, likely some code structure
+        
         if not context.code_repos:
-            return 0.5
-
-        total_score = 0.0
-        repos_analyzed = 0
+            return 0.5  # Default when no code repos
 
         git_inspector = GitInspector()
-
         try:
-            # limit to first 2 repositories
-            for code_repo in context.code_repos[:2]:
-                if code_repo.platform == "github":
-                    repo_path = git_inspector.clone_repo(code_repo)
-                    if repo_path:
-                        repo_score = self._analyze_code_quality_by_spec(
-                            repo_path, git_inspector
-                        )
-                        total_score += repo_score
-                        repos_analyzed += 1
-                        break  # first avail repo
+            code_repo = context.code_repos[0]
+            if code_repo.platform == "github":
+                repo_path = git_inspector.clone_repo(code_repo)
+                if repo_path:
+                    return self._fast_code_quality_check(repo_path)
         finally:
             git_inspector.cleanup()
 
-        if repos_analyzed == 0:
-            return 0.5  # default
+        return 0.5  # default
 
-        return total_score / repos_analyzed
-
-    def _analyze_code_quality_by_spec(
-        self, repo_path: str, inspector: GitInspector
-    ) -> float:
-        """Analyze code quality using existing static-analysis hooks."""
-        import glob
+    def _fast_code_quality_check(self, repo_path: str) -> float:
+        """Fast code quality estimation without running linters."""
         import os
-        import subprocess
 
-        total_errors = 0
+        score = 0.5  # baseline
 
-        # try to run existing static analysis tools
-        try:
-            # check if flake8 config exists and try to run
-            flake8_configs = [".flake8", "setup.cfg", "tox.ini", "pyproject.toml"]
-            has_flake8_config = any(
-                os.path.exists(os.path.join(repo_path, config))
-                for config in flake8_configs
-            )
-
-            if has_flake8_config:
-                try:
-                    result = subprocess.run(
-                        ["flake8", repo_path],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        cwd=repo_path,
-                    )
-                    if result.returncode == 0:
-                        total_errors += 0
-                    else:
-                        error_lines = [
-                            line for line in result.stdout.split("\n") if line.strip()
-                        ]
-                        total_errors += len(error_lines)
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    # fallback: estimate errors from file analysis
-                    python_files = glob.glob(
-                        os.path.join(repo_path, "**", "*.py"), recursive=True
-                    )
-                    total_errors += len(python_files) // 5  # conservative estimate
-
-            # check for mypy config and try to run
-            mypy_configs = ["mypy.ini", ".mypy.ini", "setup.cfg", "pyproject.toml"]
-            has_mypy_config = any(
-                os.path.exists(os.path.join(repo_path, config))
-                for config in mypy_configs
-            )
-
-            if has_mypy_config:
-                try:
-                    # try to run mypy on the repository
-                    result = subprocess.run(
-                        ["mypy", repo_path],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        cwd=repo_path,
-                    )
-                    if result.returncode != 0:
-                        # count mypy errors
-                        error_lines = [
-                            line
-                            for line in result.stdout.split("\n")
-                            if "error:" in line.lower()
-                        ]
-                        total_errors += len(error_lines)
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    # fallback: estimate type errors
-                    python_files = glob.glob(
-                        os.path.join(repo_path, "**", "*.py"), recursive=True
-                    )
-                    total_errors += len(python_files) // 8  # Conservative estimate
-
-            # if no linting configs found, use basic syntax checking
-            if not has_flake8_config and not has_mypy_config:
-                python_files = glob.glob(
-                    os.path.join(repo_path, "**", "*.py"), recursive=True
-                )
-                for py_file in python_files[:20]:  # limit for performance
-                    try:
-                        with open(py_file, "r") as f:
-                            content = f.read()
-                            # syntax check
-                            compile(content, py_file, "exec")
-                    except SyntaxError:
-                        total_errors += 1
-                    except BaseException:
-                        pass  # other errors
-
-        except Exception:
-            # last fallback: conservative estimation
-            python_files = glob.glob(
-                os.path.join(repo_path, "**", "*.py"), recursive=True
-            )
-            total_errors = max(1, len(python_files) // 4) 
-
-        base_score = max(0.0, min(1.0, 1.0 - total_errors / 50.0))
-
-        # bump: tests folder exists (tests/ or test/) → +0.1
-        has_tests = os.path.exists(os.path.join(repo_path, "tests")) or os.path.exists(
-            os.path.join(repo_path, "test")
+        # Check for tests folder (+0.15)
+        has_tests = (
+            os.path.exists(os.path.join(repo_path, "tests")) or
+            os.path.exists(os.path.join(repo_path, "test"))
         )
         if has_tests:
-            base_score += 0.1
+            score += 0.15
 
-        # bump: CI config present (.github/workflows/*.yml or ci/*.yml) → +0.1
-        has_ci = (
-            os.path.exists(os.path.join(repo_path, ".github", "workflows"))
-            or os.path.exists(os.path.join(repo_path, "ci"))
-            or any(
-                os.path.exists(os.path.join(repo_path, ci_file))
-                for ci_file in [".travis.yml", ".circleci", "azure-pipelines.yml"]
-            )
-        )
-        if has_ci:
-            base_score += 0.1
+        # Check for CI config (+0.15)
+        ci_indicators = [
+            os.path.join(repo_path, ".github", "workflows"),
+            os.path.join(repo_path, ".travis.yml"),
+            os.path.join(repo_path, ".circleci"),
+            os.path.join(repo_path, "azure-pipelines.yml"),
+        ]
+        if any(os.path.exists(p) for p in ci_indicators):
+            score += 0.15
 
-        # cap at 1.0
-        return min(1.0, base_score)
+        # Check for linting config (+0.1) - presence suggests quality focus
+        lint_configs = [".flake8", "mypy.ini", ".mypy.ini", ".pylintrc"]
+        if any(os.path.exists(os.path.join(repo_path, c)) for c in lint_configs):
+            score += 0.1
+
+        # Check for requirements.txt or pyproject.toml (+0.05)
+        dep_files = ["requirements.txt", "pyproject.toml", "setup.py"]
+        if any(os.path.exists(os.path.join(repo_path, f)) for f in dep_files):
+            score += 0.05
+
+        # Check for README (+0.05)
+        readme_files = ["README.md", "README.rst", "README.txt", "README"]
+        if any(os.path.exists(os.path.join(repo_path, f)) for f in readme_files):
+            score += 0.05
+
+        return min(1.0, score)
 
     def _analyze_code_repository(
         self, repo_path: str, inspector: GitInspector, thresholds: Dict[str, Any]

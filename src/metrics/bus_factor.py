@@ -25,53 +25,90 @@ class BusFactorMetric(BaseMetric):
     def _calculate_bus_factor_score(
         self, context: ModelContext, config: Dict[str, Any]
     ) -> float:
-        """Calculate bus factor from unique commit authors.
+        """Calculate bus factor from contributor diversity.
 
         Formula: ``min(1.0, contributors / 5.0)``.
+        Uses HF metadata for fast estimation without cloning.
         """
         contributors = 0
 
-        # get contributor count from git repository analysis
-        if context.code_repos:
+        # Primary: estimate from HF engagement metrics
+        if context.hf_info:
+            downloads = context.hf_info.get("downloads", 0)
+            likes = context.hf_info.get("likes", 0)
+            file_count = context.hf_info.get("file_count", 0)
+
+            # Multi-factor contributor estimation:
+            # - Downloads indicate usage breadth
+            # - Likes indicate community approval
+            # - File count suggests complexity/maintenance
+            # - Organization tags suggest team involvement
+
+            contributor_signals = 0
+
+            # Downloads: signals user base that likely found bugs
+            if downloads > 500000:
+                contributor_signals += 2.5
+            elif downloads > 100000:
+                contributor_signals += 2.0
+            elif downloads > 50000:
+                contributor_signals += 1.5
+            elif downloads > 10000:
+                contributor_signals += 1.0
+            elif downloads > 1000:
+                contributor_signals += 0.5
+
+            # Likes: direct community validation
+            if likes > 500:
+                contributor_signals += 2.0
+            elif likes > 100:
+                contributor_signals += 1.5
+            elif likes > 50:
+                contributor_signals += 1.0
+            elif likes > 10:
+                contributor_signals += 0.5
+
+            # File count: more files = more maintenance burden
+            if file_count > 100:
+                contributor_signals += 1.0
+            elif file_count > 50:
+                contributor_signals += 0.5
+
+            # Organization presence: org models usually have teams
+            if context.hf_info.get("author"):
+                author = context.hf_info.get("author", "")
+                # Organization models tend to have more contributors
+                if isinstance(author, str) and "/" in author:
+                    contributor_signals += 1.0
+
+            # Convert signals to estimated contributors
+            contributors = max(1, min(5, contributor_signals))
+
+        # Fallback: use Git analysis if HF data insufficient
+        if contributors == 1 and context.code_repos:
             git_inspector = GitInspector()
             try:
-                # limit to first 2 repositories to prevent excessive processing
-                for code_repo in context.code_repos[:2]:
-                    repo_path = git_inspector.clone_repo(code_repo)
-                    if repo_path:
-                        analysis = git_inspector.analyze_repository(repo_path)
-                        contributor_data = analysis.get("contributor_analysis", {})
+                code_repo = context.code_repos[0]
+                repo_path = git_inspector.clone_repo(code_repo)
+                if repo_path:
+                    analysis = git_inspector.analyze_repository(repo_path)
+                    contributor_data = analysis.get("contributor_analysis", {})
 
-                        # get unique authors (prefer last 12 months, otherwise all-time)
-                        recent_authors = contributor_data.get(
-                            "recent_unique_authors", 0
-                        )
-                        all_time_authors = contributor_data.get("unique_authors", 0)
+                    recent_authors = contributor_data.get(
+                        "recent_unique_authors", 0
+                    )
+                    all_time_authors = contributor_data.get(
+                        "unique_authors", 0
+                    )
 
-                        contributors = (
-                            recent_authors if recent_authors > 0 else all_time_authors
-                        )
-                        break  # use first available repo
+                    if recent_authors > 0:
+                        contributors = min(5, recent_authors)
+                    elif all_time_authors > 0:
+                        contributors = min(5, all_time_authors)
             finally:
                 git_inspector.cleanup()
 
-        # otherwise, try to estimate from HF metadata
-        if contributors == 0 and context.hf_info:
-            # estimate contributors based on HF engagement as fallback
-            downloads = context.hf_info.get("downloads", 0)
-            likes = context.hf_info.get("likes", 0)
-
-            # rough estimation: high engagement suggests more contributors
-            if downloads > 100000 and likes > 100:
-                contributors = 5 # assumption
-            elif downloads > 10000 and likes > 50:
-                contributors = 3
-            elif downloads > 1000 and likes > 10:
-                contributors = 2
-            else:
-                contributors = 1
-
-        # specification formula: BusFactor = min(1.0, contributors / 5.0)
+        # specification: BusFactor = min(1.0, contributors / 5.0)
         return min(1.0, contributors / 5.0)
 
     # analyze hugging face engagement
