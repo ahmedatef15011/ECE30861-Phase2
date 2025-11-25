@@ -44,31 +44,28 @@ class TestBasicFunctionality:
         """Test metric name property."""
         assert metric.name == "reproducibility"
     
-    @pytest.mark.asyncio
-    async def test_no_readme_returns_zero(self, metric, base_context):
+    def test_no_readme_returns_zero(self, metric, base_context):
         """Test that no README content returns score 0.0."""
         base_context.readme_content = None
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
         assert result.latency >= 0
     
-    @pytest.mark.asyncio
-    async def test_no_code_blocks_returns_zero(self, metric, base_context):
+    def test_no_code_blocks_returns_zero(self, metric, base_context):
         """Test that README without code blocks returns score 0.0."""
         base_context.readme_content = """
         # Test Model
         
         This is a great model but has no code examples.
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
 
 
 class TestSafeCodeExecution:
     """Test safe code execution scenarios."""
     
-    @pytest.mark.asyncio
-    async def test_simple_safe_code_runs(self, metric, base_context):
+    def test_simple_safe_code_runs(self, metric, base_context):
         """Test that simple safe code executes successfully."""
         base_context.readme_content = """
         # Test Model
@@ -79,11 +76,10 @@ class TestSafeCodeExecution:
         print(x + y)
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 1.0  # Runs without modification
     
-    @pytest.mark.asyncio
-    async def test_safe_torch_code(self, metric, base_context):
+    def test_safe_torch_code(self, metric, base_context):
         """Test safe PyTorch code execution."""
         base_context.readme_content = """
         # Test Model
@@ -97,12 +93,11 @@ class TestSafeCodeExecution:
             print("Torch not available")
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         # Should be 1.0 or 0.5 depending on if torch is available
         assert result.score in [0.0, 0.5, 1.0]
     
-    @pytest.mark.asyncio
-    async def test_multiple_safe_code_blocks(self, metric, base_context):
+    def test_multiple_safe_code_blocks(self, metric, base_context):
         """Test multiple safe code blocks."""
         base_context.readme_content = """
         # Test Model
@@ -118,15 +113,14 @@ class TestSafeCodeExecution:
         print(y)
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score >= 0.0  # At least one should work
 
 
 class TestDangerousCodeBlocking:
     """Test dangerous code pattern detection and blocking."""
     
-    @pytest.mark.asyncio
-    async def test_os_system_blocked(self, metric, base_context):
+    def test_os_system_blocked(self, metric, base_context):
         """Test that os.system() is blocked."""
         base_context.readme_content = """
         ```python
@@ -134,11 +128,10 @@ class TestDangerousCodeBlocking:
         os.system('ls')
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_subprocess_blocked(self, metric, base_context):
+    def test_subprocess_blocked(self, metric, base_context):
         """Test that subprocess is blocked."""
         base_context.readme_content = """
         ```python
@@ -146,33 +139,30 @@ class TestDangerousCodeBlocking:
         subprocess.run(['ls'])
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_exec_blocked(self, metric, base_context):
+    def test_exec_blocked(self, metric, base_context):
         """Test that exec() is blocked."""
         base_context.readme_content = """
         ```python
         exec("print('dangerous')")
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_eval_blocked(self, metric, base_context):
+    def test_eval_blocked(self, metric, base_context):
         """Test that eval() is blocked."""
         base_context.readme_content = """
         ```python
         eval("1 + 1")
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_file_operations_blocked(self, metric, base_context):
+    def test_file_operations_blocked(self, metric, base_context):
         """Test that file operations are blocked."""
         base_context.readme_content = """
         ```python
@@ -180,11 +170,10 @@ class TestDangerousCodeBlocking:
             data = f.read()
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_network_calls_blocked(self, metric, base_context):
+    def test_network_calls_blocked(self, metric, base_context):
         """Test that network calls are blocked."""
         base_context.readme_content = """
         ```python
@@ -192,11 +181,10 @@ class TestDangerousCodeBlocking:
         requests.get('http://example.com')
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_mixed_safe_and_unsafe(self, metric, base_context):
+    def test_mixed_safe_and_unsafe(self, metric, base_context):
         """Test mixed safe and unsafe code blocks."""
         base_context.readme_content = """
         Safe code:
@@ -211,7 +199,7 @@ class TestDangerousCodeBlocking:
         os.system('rm -rf /')
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         # Should run the safe block
         assert result.score >= 0.0
 
@@ -219,8 +207,7 @@ class TestDangerousCodeBlocking:
 class TestTimeoutHandling:
     """Test timeout protection."""
     
-    @pytest.mark.asyncio
-    async def test_infinite_loop_timeout(self, metric, base_context):
+    def test_infinite_loop_timeout(self, metric, base_context):
         """Test that infinite loops are stopped by timeout."""
         base_context.readme_content = """
         ```python
@@ -228,11 +215,10 @@ class TestTimeoutHandling:
             pass
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_long_computation_timeout(self, metric, base_context):
+    def test_long_computation_timeout(self, metric, base_context):
         """Test that long computations timeout."""
         base_context.readme_content = """
         ```python
@@ -240,7 +226,7 @@ class TestTimeoutHandling:
         time.sleep(30)  # Longer than timeout
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         # time.sleep might be allowed, but should timeout
         assert result.score == 0.0
 
@@ -318,8 +304,7 @@ class TestDebuggingFixes:
         assert 'try:' in fixed
         assert 'except' in fixed
     
-    @pytest.mark.asyncio
-    async def test_code_runs_after_debugging(self, metric, base_context):
+    def test_code_runs_after_debugging(self, metric, base_context):
         """Test that code runs after debugging fixes."""
         # Code that might need imports added
         base_context.readme_content = """
@@ -329,7 +314,7 @@ class TestDebuggingFixes:
         print(x)
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         # Should get at least 0.5 if debugging helps
         assert result.score >= 0.0
 
@@ -337,39 +322,35 @@ class TestDebuggingFixes:
 class TestEdgeCases:
     """Test edge cases and error handling."""
     
-    @pytest.mark.asyncio
-    async def test_empty_readme(self, metric, base_context):
+    def test_empty_readme(self, metric, base_context):
         """Test empty README."""
         base_context.readme_content = ""
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_malformed_code_block(self, metric, base_context):
+    def test_malformed_code_block(self, metric, base_context):
         """Test malformed code blocks."""
         base_context.readme_content = """
         ```python
         This is not valid Python syntax @@@ ### !!!
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score == 0.0
     
-    @pytest.mark.asyncio
-    async def test_empty_code_block(self, metric, base_context):
+    def test_empty_code_block(self, metric, base_context):
         """Test empty code blocks."""
         base_context.readme_content = """
         ```python
         
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         # Empty code block might get debugging fixes that add try/except
         # So it could return 0.5 if the wrapper itself runs
         assert result.score in [0.0, 0.5]
     
-    @pytest.mark.asyncio
-    async def test_unicode_in_code(self, metric, base_context):
+    def test_unicode_in_code(self, metric, base_context):
         """Test Unicode characters in code."""
         base_context.readme_content = """
         ```python
@@ -377,15 +358,14 @@ class TestEdgeCases:
         print(message)
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score >= 0.0
 
 
 class TestSecurityLogging:
     """Test security violation logging."""
     
-    @pytest.mark.asyncio
-    async def test_security_violation_logged(self, metric, base_context):
+    def test_security_violation_logged(self, metric, base_context):
         """Test that security violations are logged."""
         base_context.readme_content = """
         ```python
@@ -395,7 +375,7 @@ class TestSecurityLogging:
         """
         
         with patch('src.metrics.Reproducibility.logger') as mock_logger:
-            result = await metric.compute(base_context, {})
+            result = metric.compute(base_context, {})
             
             # Should log security warning
             assert mock_logger.warning.called or mock_logger.error.called
@@ -405,8 +385,7 @@ class TestSecurityLogging:
 class TestCrossPlatformCompatibility:
     """Test cross-platform compatibility."""
     
-    @pytest.mark.asyncio
-    async def test_windows_compatibility(self, metric, base_context):
+    def test_windows_compatibility(self, metric, base_context):
         """Test that code works on Windows (no signal.alarm)."""
         base_context.readme_content = """
         ```python
@@ -415,7 +394,7 @@ class TestCrossPlatformCompatibility:
         ```
         """
         # This test verifies no AttributeError for signal.SIGALRM
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         assert result.score >= 0.0  # Should work without errors
     
     def test_execution_wrapper_no_signal(self, metric):
@@ -432,15 +411,14 @@ class TestCrossPlatformCompatibility:
 class TestPerformance:
     """Test performance and latency tracking."""
     
-    @pytest.mark.asyncio
-    async def test_latency_recorded(self, metric, base_context):
+    def test_latency_recorded(self, metric, base_context):
         """Test that latency is properly recorded."""
         base_context.readme_content = """
         ```python
         x = 10
         ```
         """
-        result = await metric.compute(base_context, {})
+        result = metric.compute(base_context, {})
         
         # Latency should be non-negative
         assert result.latency >= 0

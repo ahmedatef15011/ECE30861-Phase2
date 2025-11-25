@@ -69,13 +69,11 @@ def model_context_without_github():
 class TestReviewednessMetric:
     """Test cases for ReviewednessMetric."""
 
-    @pytest.mark.asyncio
-    async def test_metric_name(self, reviewedness_metric):
+    def test_metric_name(self, reviewedness_metric):
         """Test that metric has correct name."""
         assert reviewedness_metric.name == "reviewedness"
 
-    @pytest.mark.asyncio
-    async def test_no_github_repo_returns_minus_one(
+    def test_no_github_repo_returns_minus_one(
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that models without GitHub repos return -1."""
@@ -87,8 +85,7 @@ class TestReviewednessMetric:
         assert result.score == -1.0
         assert result.latency >= 0
 
-    @pytest.mark.asyncio
-    async def test_empty_code_repos_returns_minus_one(
+    def test_empty_code_repos_returns_minus_one(
         self, reviewedness_metric
     ):
         """Test that empty code_repos list returns -1."""
@@ -106,9 +103,8 @@ class TestReviewednessMetric:
 
         assert result.score == -1.0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
-    async def test_clone_failure_returns_minus_one(
+    def test_clone_failure_returns_minus_one(
         self, mock_git_inspector, reviewedness_metric,
         model_context_with_github
     ):
@@ -125,10 +121,9 @@ class TestReviewednessMetric:
 
         assert result.score == -1.0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_all_code_reviewed(
+    def test_all_code_reviewed(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -162,10 +157,9 @@ def456|PR #2: Add feature
         assert result.score == 1.0  # 100% reviewed
         assert result.latency > 0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_no_code_reviewed(
+    def test_no_code_reviewed(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -199,10 +193,9 @@ def456|Update code
         assert result.score == 0.0  # 0% reviewed
         assert result.latency > 0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_partial_code_reviewed(
+    def test_partial_code_reviewed(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -233,10 +226,9 @@ def456|Direct commit
         assert result.score == 0.6  # 60% reviewed
         assert result.latency > 0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_filters_weight_files(
+    def test_filters_weight_files(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -270,10 +262,9 @@ def456|Direct commit
         assert isinstance(result, MetricResult)
         assert abs(result.score - 0.667) < 0.01
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_pr_pattern_detection(
+    def test_pr_pattern_detection(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -314,10 +305,9 @@ mno345|Direct commit no PR
         assert isinstance(result, MetricResult)
         assert result.score == 0.8
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_git_command_timeout(
+    def test_git_command_timeout(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -341,10 +331,9 @@ mno345|Direct commit no PR
         # Should return -1 on error
         assert result.score == -1.0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_git_command_failure(
+    def test_git_command_failure(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -368,10 +357,9 @@ mno345|Direct commit no PR
         # Should return -1 on error
         assert result.score == -1.0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_empty_repository(
+    def test_empty_repository(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -395,10 +383,9 @@ mno345|Direct commit no PR
         # Empty repo should return 0.0
         assert result.score == 0.0
 
-    @pytest.mark.asyncio
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
-    async def test_only_weight_files_in_repo(
+    def test_only_weight_files_in_repo(
         self, mock_subprocess, mock_git_inspector,
         reviewedness_metric, model_context_with_github
     ):
@@ -504,8 +491,7 @@ mno345|Direct commit no PR
             "Update file", "/tmp/repo", "def"
         )
 
-    @pytest.mark.asyncio
-    async def test_metric_returns_metric_result(
+    def test_metric_returns_metric_result(
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that compute returns MetricResult object."""
@@ -519,8 +505,7 @@ mno345|Direct commit no PR
         assert isinstance(result.score, float)
         assert isinstance(result.latency, int)
 
-    @pytest.mark.asyncio
-    async def test_score_in_valid_range(
+    def test_score_in_valid_range(
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that score is always in valid range."""
@@ -530,8 +515,7 @@ mno345|Direct commit no PR
 
         assert -1.0 <= result.score <= 1.0
 
-    @pytest.mark.asyncio
-    async def test_latency_is_positive(
+    def test_latency_is_positive(
         self, reviewedness_metric, model_context_without_github
     ):
         """Test that latency is always positive."""

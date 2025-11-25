@@ -63,8 +63,7 @@ def test_git_inspector_cache_reuse():
 
 
 # HF API comprehensive tests
-@pytest.mark.asyncio
-async def test_hf_api_repository_not_found():
+def test_hf_api_repository_not_found():
     """Test HF API with repository not found error."""
     api = HuggingFaceAPI()
 
@@ -88,12 +87,11 @@ async def test_hf_api_repository_not_found():
         
         mock_model_info.side_effect = RepositoryNotFoundError("Not found", response=mock_response)
 
-        result = await api.get_model_info(model_url)
+        result = api.get_model_info(model_url)
         assert result is None
 
 
-@pytest.mark.asyncio
-async def test_hf_api_file_list_success():
+def test_hf_api_file_list_success():
     """Test HF API file listing success."""
     api = HuggingFaceAPI()
 
@@ -117,7 +115,7 @@ async def test_hf_api_file_list_success():
             "tokenizer.json",
         ]
 
-        result = await api.get_model_info(model_url)
+        result = api.get_model_info(model_url)
 
         assert result is not None
         assert result["file_count"] == 3

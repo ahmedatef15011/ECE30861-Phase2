@@ -44,8 +44,7 @@ def test_metric_name(ramp_up_metric):
     assert ramp_up_metric.name == "ramp_up_time"
 
 
-@pytest.mark.asyncio
-async def test_compute_no_readme(ramp_up_metric, model_context, config):
+def test_compute_no_readme(ramp_up_metric, model_context, config):
     """Test computation with no README."""
     result = await ramp_up_metric.compute(model_context, config)
 
@@ -53,8 +52,7 @@ async def test_compute_no_readme(ramp_up_metric, model_context, config):
     assert result.latency >= 0
 
 
-@pytest.mark.asyncio
-async def test_compute_with_readme(ramp_up_metric, model_context, config):
+def test_compute_with_readme(ramp_up_metric, model_context, config):
     """Test computation with README content."""
     model_context.readme_content = """
     # Test Model
@@ -75,8 +73,7 @@ async def test_compute_with_readme(ramp_up_metric, model_context, config):
     assert result.latency >= 0
 
 
-@pytest.mark.asyncio
-async def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
+def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
     """Test computation with comprehensive README."""
     model_context.readme_content = (
         """

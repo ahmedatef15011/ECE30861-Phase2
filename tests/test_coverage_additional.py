@@ -14,8 +14,7 @@ from src.metrics.size_score import SizeScoreMetric
 from src.models import ModelContext, ParsedURL, URLCategory
 
 
-@pytest.mark.asyncio
-async def test_size_score_estimation_paths_readme_and_patterns():
+def test_size_score_estimation_paths_readme_and_patterns():
     metric = SizeScoreMetric()
 
     # From README content (7B -> ~14GB via utils mapping or model patterns)
@@ -28,7 +27,7 @@ async def test_size_score_estimation_paths_readme_and_patterns():
         ),
         readme_content="This is a 7B parameter model",
     )
-    size_scores = await metric._calculate_size_scores(context, {})
+    size_scores = metric._calculate_size_scores(context, {})
     assert 0.0 <= size_scores.aws_server <= 1.0
 
     # From hf_info files list estimation
@@ -41,7 +40,7 @@ async def test_size_score_estimation_paths_readme_and_patterns():
         ),
         hf_info={"files": ["pytorch_model-00001-of-00002.bin", "config.json"]},
     )
-    size_scores = await metric._calculate_size_scores(context, {})
+    size_scores = metric._calculate_size_scores(context, {})
     assert 0.0 <= size_scores.jetson_nano <= 1.0
 
     # From model name patterns (13B)
@@ -53,7 +52,7 @@ async def test_size_score_estimation_paths_readme_and_patterns():
             platform="huggingface",
         ),
     )
-    size_scores = await metric._calculate_size_scores(context, {})
+    size_scores = metric._calculate_size_scores(context, {})
     assert 0.0 <= size_scores.desktop_pc <= 1.0
 
     # Generic names
@@ -66,7 +65,7 @@ async def test_size_score_estimation_paths_readme_and_patterns():
                 platform="huggingface",
             ),
         )
-        size_scores = await metric._calculate_size_scores(context, {})
+        size_scores = metric._calculate_size_scores(context, {})
         assert 0.0 <= size_scores.raspberry_pi <= 1.0
 
 
@@ -110,8 +109,7 @@ def test_code_quality_fallbacks_basic_syntax(tmp_path: Path):
         assert 0.0 <= score <= 1.0
 
 
-@pytest.mark.asyncio
-async def test_hf_api_dataset_info_and_readme_choices():
+def test_hf_api_dataset_info_and_readme_choices():
     api = HuggingFaceAPI()
 
     # dataset_info success mapping
@@ -133,7 +131,7 @@ async def test_hf_api_dataset_info_and_readme_choices():
     mock_obj.tags = ["tag"]
     mock_obj.task_categories = ["tc"]
     api.api.dataset_info = Mock(return_value=mock_obj)
-    info = await api.get_dataset_info(dataset_url)
+    info = api.get_dataset_info(dataset_url)
     assert info and info["id"] == "test/data"
 
     # get_readme_content tries multiple names, simulate first None then success
@@ -146,7 +144,7 @@ async def test_hf_api_dataset_info_and_readme_choices():
         repo="model",
     )
     with patch.object(api, "download_file", side_effect=[None, "# ok"]):
-        readme = await api.get_readme_content(model_url)
+        readme = api.get_readme_content(model_url)
         assert readme == "# ok"
 
 

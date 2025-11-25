@@ -65,8 +65,7 @@ def test_scorer_init_hf_api(mock_hf_api, temp_config):
     assert scorer.hf_api is not None
 
 
-@pytest.mark.asyncio
-async def test_enrich_context(temp_config, model_context):
+def test_enrich_context(temp_config, model_context):
     scorer = MetricScorer(temp_config)
 
     scorer.hf_api.get_model_info = AsyncMock(return_value={"id": "test/model"})
@@ -101,8 +100,7 @@ def test_calculate_net_score(temp_config):
     assert abs(net_score - expected) < 0.01
 
 
-@pytest.mark.asyncio
-async def test_score_model_integration(temp_config, model_context):
+def test_score_model_integration(temp_config, model_context):
     scorer = MetricScorer(temp_config)
 
     scorer.hf_api.get_model_info = AsyncMock(return_value={"id": "test/model"})
@@ -127,7 +125,7 @@ async def test_score_model_integration(temp_config, model_context):
                 return_value=MetricResult(score=0.7, latency=100)
             )
 
-    result = await scorer.score_model(model_context)
+    result = scorer.score_model(model_context)
 
     assert result.name == "test/model"
     assert result.category == "MODEL"

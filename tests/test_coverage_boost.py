@@ -46,8 +46,7 @@ def test_git_inspector_analysis_edge_cases():
         assert analysis["test_files"] == 2  # Both files match test pattern
 
 
-@pytest.mark.asyncio
-async def test_hf_api_error_paths():
+def test_hf_api_error_paths():
     """Test HF API error handling."""
     api = HuggingFaceAPI()
 
@@ -61,15 +60,14 @@ async def test_hf_api_error_paths():
         repo=None,
     )
 
-    result = await api.get_model_info(invalid_url)
+    result = api.get_model_info(invalid_url)
     assert result is None
 
-    result = await api.get_model_config(invalid_url)
+    result = api.get_model_config(invalid_url)
     assert result is None
 
 
-@pytest.mark.asyncio
-async def test_size_score_calculations():
+def test_size_score_calculations():
     """Test size score calculations with different thresholds."""
     metric = SizeScoreMetric()
 
@@ -119,8 +117,7 @@ def test_url_parsing_comprehensive():
     assert "model" in parts  # Only long enough part
 
 
-@pytest.mark.asyncio
-async def test_metrics_error_handling():
+def test_metrics_error_handling():
     """Test metrics error handling."""
     from src.metrics.bus_factor import BusFactorMetric
 
@@ -137,7 +134,7 @@ async def test_metrics_error_handling():
     config = {"thresholds": {"bus_factor": {}}}
 
     # Should handle missing config gracefully
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert 0.0 <= result.score <= 1.0
     assert result.latency >= 0
 

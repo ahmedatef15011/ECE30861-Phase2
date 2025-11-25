@@ -27,8 +27,7 @@ def sample_url_file():
     os.unlink(temp_path)
 
 
-@pytest.mark.asyncio
-async def test_full_scoring_pipeline():
+def test_full_scoring_pipeline():
     """Test complete scoring pipeline."""
     # Create test model context
     model_url = ParsedURL(
@@ -65,7 +64,7 @@ async def test_full_scoring_pipeline():
             )
 
     # Run scoring
-    result = await scorer.score_model(context)
+    result = scorer.score_model(context)
 
     # Verify result structure
     assert result.name == "test/model"
@@ -166,7 +165,7 @@ def test_error_handling_graceful():
     # Should not crash even with invalid data
     import asyncio
 
-    async def test_error_resilience():
+    def test_error_resilience():
         # Mock to raise errors
         scorer.hf_api.get_model_info = AsyncMock(side_effect=Exception("API Error"))
         scorer.hf_api.get_readme_content = AsyncMock(
@@ -177,7 +176,7 @@ def test_error_handling_graceful():
         )
 
         try:
-            result = await scorer.score_model(context)
+            result = scorer.score_model(context)
             # Should still produce a result, even if with low scores
             assert result.name == "invalid/model"
             assert 0.0 <= result.net_score <= 1.0

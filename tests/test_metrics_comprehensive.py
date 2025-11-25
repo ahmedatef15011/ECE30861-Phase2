@@ -52,8 +52,7 @@ def config():
 
 
 # Bus Factor Metric Tests
-@pytest.mark.asyncio
-async def test_bus_factor_no_data(config):
+def test_bus_factor_no_data(config):
     """Test bus factor with no HF info or code repos."""
     metric = BusFactorMetric()
     context = ModelContext(
@@ -65,12 +64,11 @@ async def test_bus_factor_no_data(config):
         )
     )
 
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert result.score <= 0.2  # Should get low score for no data
 
 
-@pytest.mark.asyncio
-async def test_bus_factor_with_hf_engagement(config):
+def test_bus_factor_with_hf_engagement(config):
     """Test bus factor with high HF engagement."""
     metric = BusFactorMetric()
     context = ModelContext(
@@ -83,12 +81,11 @@ async def test_bus_factor_with_hf_engagement(config):
     )
     context.hf_info = {"downloads": 50000, "likes": 200, "last_modified": "2023-12-01"}
 
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert result.score > 0.3  # Should get good score for high engagement
 
 
 # Performance Claims Metric Tests
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "readme_content,expected_range",
     [
@@ -105,7 +102,7 @@ async def test_bus_factor_with_hf_engagement(config):
         ),
     ],
 )
-async def test_performance_claims_variations(readme_content, expected_range, config):
+def test_performance_claims_variations(readme_content, expected_range, config):
     """Test performance claims with various README content."""
     metric = PerformanceClaimsMetric()
     context = ModelContext(
@@ -118,12 +115,11 @@ async def test_performance_claims_variations(readme_content, expected_range, con
     )
     context.readme_content = readme_content
 
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert expected_range[0] <= result.score <= expected_range[1]
 
 
 # Size Score Metric Tests
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "model_name,expected_size",
     [
@@ -133,7 +129,7 @@ async def test_performance_claims_variations(readme_content, expected_range, con
         ("unknown-model", 0.5),  # default fallback
     ],
 )
-async def test_size_score_name_patterns(model_name, expected_size, config):
+def test_size_score_name_patterns(model_name, expected_size, config):
     """Test size score extraction from model names."""
     metric = SizeScoreMetric()
     context = ModelContext(
@@ -146,12 +142,11 @@ async def test_size_score_name_patterns(model_name, expected_size, config):
     )
 
     # Test the size estimation method directly
-    estimated_size = await metric._estimate_model_size(context)
+    estimated_size = metric._estimate_model_size(context)
     assert abs(estimated_size - expected_size) < 0.1  # Allow small tolerance
 
 
 # Dataset and Code Score Tests
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "has_datasets,has_code,expected_min",
     [
@@ -161,7 +156,7 @@ async def test_size_score_name_patterns(model_name, expected_size, config):
         (True, True, 0.7),  # Both bonuses
     ],
 )
-async def test_dataset_code_combinations(has_datasets, has_code, expected_min, config):
+def test_dataset_code_combinations(has_datasets, has_code, expected_min, config):
     """Test dataset and code score with different combinations."""
     metric = DatasetAndCodeScoreMetric()
     context = ModelContext(
@@ -192,13 +187,12 @@ async def test_dataset_code_combinations(has_datasets, has_code, expected_min, c
             )
         ]
 
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert result.score >= expected_min
 
 
 # Dataset Quality Tests
-@pytest.mark.asyncio
-async def test_dataset_quality_no_datasets(config):
+def test_dataset_quality_no_datasets(config):
     """Test dataset quality with no linked datasets."""
     metric = DatasetQualityMetric()
     context = ModelContext(
@@ -210,12 +204,11 @@ async def test_dataset_quality_no_datasets(config):
         ),
     )
 
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert result.score == 0.3  # Default when no datasets
 
 
-@pytest.mark.asyncio
-async def test_dataset_quality_with_mock_hf_dataset(config):
+def test_dataset_quality_with_mock_hf_dataset(config):
     """Test dataset quality with mocked HF dataset."""
     metric = DatasetQualityMetric()
     context = ModelContext(
@@ -254,13 +247,12 @@ async def test_dataset_quality_with_mock_hf_dataset(config):
             return_value={"tags": ["license:apache-2.0"]}
         )
 
-        result = await metric.compute(context, config)
+        result = metric.compute(context, config)
         assert result.score > 0.7  # Should get high score for complete info
 
 
 # Code Quality Tests
-@pytest.mark.asyncio
-async def test_code_quality_no_repos(config):
+def test_code_quality_no_repos(config):
     """Test code quality with no linked repositories."""
     metric = CodeQualityMetric()
     context = ModelContext(
@@ -272,12 +264,11 @@ async def test_code_quality_no_repos(config):
         ),
     )
 
-    result = await metric.compute(context, config)
+    result = metric.compute(context, config)
     assert result.score == 0.5  # Default medium score
 
 
-@pytest.mark.asyncio
-async def test_code_quality_with_mock_analysis(config):
+def test_code_quality_with_mock_analysis(config):
     """Test code quality with mocked repository analysis."""
     metric = CodeQualityMetric()
     context = ModelContext(
@@ -315,5 +306,5 @@ async def test_code_quality_with_mock_analysis(config):
             },
         }
 
-        result = await metric.compute(context, config)
+        result = metric.compute(context, config)
         assert result.score > 0.6  # Should get good score for quality repo

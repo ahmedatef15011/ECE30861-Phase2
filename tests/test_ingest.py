@@ -195,8 +195,7 @@ class TestIngestValidator:
         assert scores["reproducibility"] == 0.7
         assert scores["code_quality"] == 0.8
 
-    @pytest.mark.asyncio
-    async def test_validate_ingest_candidate_passes(self, validator):
+    def test_validate_ingest_candidate_passes(self, validator):
         """Test full ingest validation when model passes."""
         # Mock the scorer
         with patch.object(validator.scorer, "score_model") as mock_score:
@@ -235,7 +234,7 @@ class TestIngestValidator:
             )
             mock_score.return_value = mock_result
 
-            passes, result = await validator.validate_ingest_candidate(
+            passes, result = validator.validate_ingest_candidate(
                 "google/bert-base-uncased"
             )
 
@@ -244,8 +243,7 @@ class TestIngestValidator:
             assert result["artifact_id"] is not None
             assert result["all_scores"]["reproducibility"] == 0.7
 
-    @pytest.mark.asyncio
-    async def test_validate_ingest_candidate_fails(self, validator):
+    def test_validate_ingest_candidate_fails(self, validator):
         """Test full ingest validation when model fails."""
         # Mock the scorer
         with patch.object(validator.scorer, "score_model") as mock_score:
@@ -284,7 +282,7 @@ class TestIngestValidator:
             )
             mock_score.return_value = mock_result
 
-            passes, result = await validator.validate_ingest_candidate(
+            passes, result = validator.validate_ingest_candidate(
                 "unknown/model"
             )
 

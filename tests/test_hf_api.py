@@ -86,37 +86,37 @@ def test_get_model_info_non_hf_url(hf_api):
 
 @patch("builtins.open")
 @patch("src.hf_api.hf_hub_download")
-async def test_download_file_success(mock_download, mock_open, hf_api):
+def test_download_file_success(mock_download, mock_open, hf_api):
     """Test successful file download."""
     mock_download.return_value = "/tmp/test_file"
     mock_open.return_value.__enter__.return_value.read.return_value = "test content"
 
-    result = await hf_api.download_file("test/model", "README.md")
+    result = hf_api.download_file("test/model", "README.md")
     assert result == "test content"
 
 
-async def test_download_file_failure(hf_api):
+def test_download_file_failure(hf_api):
     """Test file download failure."""
     with patch("src.hf_api.hf_hub_download", side_effect=Exception("Download failed")):
-        result = await hf_api.download_file("test/model", "README.md")
+        result = hf_api.download_file("test/model", "README.md")
         assert result is None
 
 
-async def test_get_readme_content(hf_api, model_url):
+def test_get_readme_content(hf_api, model_url):
     """Test README content retrieval."""
     with patch.object(hf_api, "download_file", return_value="# Test README"):
-        result = await hf_api.get_readme_content(model_url)
+        result = hf_api.get_readme_content(model_url)
         assert result == "# Test README"
 
 
-async def test_get_model_config(hf_api, model_url):
+def test_get_model_config(hf_api, model_url):
     """Test model config retrieval."""
     with patch.object(hf_api, "download_file") as mock_download:
         mock_download.side_effect = lambda repo, filename, is_dataset: (
             '{"test": "config"}' if filename == "config.json" else None
         )
 
-        result = await hf_api.get_model_config(model_url)
+        result = hf_api.get_model_config(model_url)
         assert result is not None
         assert "config.json" in result
         assert result["config.json"]["test"] == "config"
