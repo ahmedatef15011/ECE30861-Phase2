@@ -81,13 +81,13 @@ class MetricScorer:
             },
         }
     
-    # score a model using all metrics in parallel
-    async def score_model(self, context: ModelContext) -> AuditResult:
-        await self._enrich_context(context)
+    # score a model using all metrics sequentially
+    def score_model(self, context: ModelContext) -> AuditResult:
+        self._enrich_context(context)
 
-        # compute all metrics in parallel
+        # compute all metrics sequentially
         with measure_time() as get_net_latency:
-            metric_results = await self._compute_metrics_parallel(context)
+            metric_results = self._compute_metrics(context)
 
             # calculate net score
             net_score = self._calculate_net_score(metric_results)
@@ -95,7 +95,7 @@ class MetricScorer:
         # build audit result - recalculate size_score breakdown for AuditResult
         size_score_metric = SizeScoreMetric()
         size_score_config = self.config.get("metrics", {}).get("size_score", {})
-        size_score_breakdown = await size_score_metric._calculate_size_scores(
+        size_score_breakdown = size_score_metric._calculate_size_scores(
             context, size_score_config
         )
 
@@ -132,35 +132,28 @@ class MetricScorer:
             treescore_latency=0,
         )
 
-    async def _enrich_context(self, context: ModelContext):
-        # enrich context with data from APIs - PARALLEL VERSION
-        import asyncio
+    def _enrich_context(self, context: ModelContext):
+        # enrich context with data from APIs - SEQUENTIAL VERSION
         import re
         
-        # ✅ FIX: Create all tasks upfront (don't await yet)
-        tasks = {
-            'hf_info': self.hf_api.get_model_info(context.model_url),
-            'readme': self.hf_api.get_readme_content(context.model_url),
-            'config': self.hf_api.get_model_config(context.model_url),
-        }
-        
-        # ✅ FIX: Run all tasks in parallel with exception handling
-        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-        
-        # Process results
-        task_names = list(tasks.keys())
-        for task_name, result in zip(task_names, results):
-            if isinstance(result, Exception):
-                logger.error(f"Failed to fetch {task_name}: {result}")
-                result = None
+        # Fetch HF data synchronously
+        try:
+            context.hf_info = self.hf_api.get_model_info(context.model_url)
+        except Exception as e:
+            logger.error(f"Failed to fetch hf_info: {e}")
+            context.hf_info = None
             
-            # Assign results to context
-            if task_name == 'hf_info':
-                context.hf_info = result
-            elif task_name == 'readme':
-                context.readme_content = result
-            elif task_name == 'config':
-                context.config_data = result
+        try:
+            context.readme_content = self.hf_api.get_readme_content(context.model_url)
+        except Exception as e:
+            logger.error(f"Failed to fetch readme: {e}")
+            context.readme_content = None
+            
+        try:
+            context.config_data = self.hf_api.get_model_config(context.model_url)
+        except Exception as e:
+            logger.error(f"Failed to fetch config: {e}")
+            context.config_data = None
         
         # Extract GitHub repository from README (if available)
         if context.readme_content:
@@ -196,50 +189,30 @@ class MetricScorer:
         
         logger.info(f"Enriched context for {context.model_url.name}")
 
-    # compute all metrics in parallel
-    async def _compute_metrics_parallel(
+    # compute all metrics sequentially
+    def _compute_metrics(
         self, context: ModelContext
     ) -> Dict[str, Any]:
-        import asyncio
-        
-        # create tasks for all metrics - creating routine tasks
-        tasks = []
-        metric_names = []
+        # execute all tasks sequentially
+        results = {}
         
         for metric in self.metrics:
-            task = metric.compute(context, self.config)
-            tasks.append(task)
-            metric_names.append(metric.name)
-
-        # execute all tasks concurrently using asyncio.gather
-        try:
-            # Run all metrics in parallel
-            task_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Build results dictionary
-            results = {}
-            for metric_name, result in zip(metric_names, task_results):
-                if isinstance(result, Exception):
-                    logger.error(f"Error computing {metric_name}: {result}")
-                    # default result on error
-                    results[metric_name] = MetricResult(score=0.0, latency=0)
-                elif isinstance(result, MetricResult):
+            metric_name = metric.name
+            try:
+                result = metric.compute(context, self.config)
+                if isinstance(result, MetricResult):
                     results[metric_name] = result
                 else:
                     logger.warning(
                         f"Unexpected result type for {metric_name}: {type(result)}"
                     )
                     results[metric_name] = MetricResult(score=0.0, latency=0)
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Error in parallel metric computation: {e}")
-            # Return default results for all metrics
-            return {
-                metric_name: MetricResult(score=0.0, latency=0)
-                for metric_name in metric_names
-            }
+            except Exception as e:
+                logger.error(f"Error computing {metric_name}: {e}")
+                results[metric_name] = MetricResult(score=0.0, latency=0)
+        
+        return results
+
 
     def _calculate_net_score(self, metric_results: Dict[str, Any]) -> float:
         # calculate weighted net score from individual metrics

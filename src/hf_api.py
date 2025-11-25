@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from typing import Any, Dict, Optional
@@ -13,14 +12,14 @@ logger = get_logger()
 
 
 class HuggingFaceAPI:
-    # wrapper for Hugging Face Hub API operations
+    # wrapper for Hugging Face Hub API operations (synchronous)
 
     def __init__(self):
         self.api = HfApi()
         self.token = os.getenv("HF_TOKEN")
         self.timeout = 30.0
 
-    async def get_model_info(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
+    def get_model_info(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
         # get comprehensive model information from HF Hub API
         if model_url.platform != "huggingface" or not model_url.repo:
             return None
@@ -33,10 +32,8 @@ class HuggingFaceAPI:
                 else model_url.repo
             )
             
-            # ✅ FIX: Run blocking API call in thread pool
-            model_info = await asyncio.to_thread(
-                self.api.model_info, repo_id, token=self.token
-            )
+            # Direct synchronous API call
+            model_info = self.api.model_info(repo_id, token=self.token)
 
             # convert to dict and add additional metrics
             info_dict = {
@@ -95,11 +92,9 @@ class HuggingFaceAPI:
                 # Ignore errors in tag processing
                 pass
 
-            # ✅ FIX: Get file information in thread pool
+            # Get file information synchronously
             try:
-                files = await asyncio.to_thread(
-                    list_repo_files, repo_id, token=self.token
-                )
+                files = list_repo_files(repo_id, token=self.token)
                 info_dict["files"] = files
                 info_dict["file_count"] = len(files)
             except Exception as e:
@@ -116,7 +111,7 @@ class HuggingFaceAPI:
             logger.error(f"Error fetching model info for {model_url.url}: {e}")
             return None
 
-    async def get_dataset_info(
+    def get_dataset_info(
         self, dataset_url: ParsedURL
     ) -> Optional[Dict[str, Any]]:
         # get dataset information from HF Hub API
@@ -130,10 +125,8 @@ class HuggingFaceAPI:
                 else dataset_url.repo
             )
             
-            # ✅ FIX: Run blocking API call in thread pool
-            dataset_info = await asyncio.to_thread(
-                self.api.dataset_info, repo_id, token=self.token
-            )
+            # Direct synchronous API call
+            dataset_info = self.api.dataset_info(repo_id, token=self.token)
 
             return {
                 "id": dataset_info.id,
@@ -150,33 +143,29 @@ class HuggingFaceAPI:
             logger.warning(f"Could not fetch dataset info for {dataset_url.url}: {e}")
             return None
 
-    async def download_file(
+    def download_file(
         self, repo_id: str, filename: str, is_dataset: bool = False
     ) -> Optional[str]:
         # download a specific file from a repository
         try:
-            # ✅ FIX: Download file in thread pool
-            file_path = await asyncio.to_thread(
-                hf_hub_download,
+            # Download file synchronously
+            file_path = hf_hub_download(
                 repo_id=repo_id,
                 filename=filename,
                 repo_type="dataset" if is_dataset else "model",
                 token=self.token,
             )
 
-            # ✅ FIX: Read file content in thread pool
-            def read_file():
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    return f.read()
-
-            content = await asyncio.to_thread(read_file)
+            # Read file content
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
             return content
 
         except Exception as e:
             logger.debug(f"Could not download {filename} from {repo_id}: {e}")
             return None
 
-    async def get_readme_content(self, parsed_url: ParsedURL) -> Optional[str]:
+    def get_readme_content(self, parsed_url: ParsedURL) -> Optional[str]:
         # get README content from a repository
         if parsed_url.platform != "huggingface" or not parsed_url.repo:
             return None
@@ -191,22 +180,18 @@ class HuggingFaceAPI:
         # try different README file names
         readme_files = ["README.md", "readme.md", "README.txt", "readme.txt"]
 
-        # ✅ OPTIMIZATION: Try all README files in parallel
-        tasks = [
-            self.download_file(repo_id, readme_file, is_dataset)
-            for readme_file in readme_files
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Return first successful result
-        for result in results:
-            if result and not isinstance(result, Exception):
-                return result
+        # Try README files sequentially
+        for readme_file in readme_files:
+            try:
+                content = self.download_file(repo_id, readme_file, is_dataset)
+                if content:
+                    return content
+            except Exception:
+                continue
 
         return None
 
-    async def get_model_config(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
+    def get_model_config(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
         # get model configuration files
         if model_url.platform != "huggingface" or not model_url.repo:
             return None
@@ -217,20 +202,17 @@ class HuggingFaceAPI:
 
         config_files = ["config.json", "model_index.json", "tokenizer.json"]
 
-        # ✅ OPTIMIZATION: Download all config files in parallel
-        tasks = [
-            self.download_file(repo_id, config_file, False)
-            for config_file in config_files
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+        # Download config files sequentially
         config_data = {}
-        for config_file, result in zip(config_files, results):
-            if result and not isinstance(result, Exception):
-                try:
-                    config_data[config_file] = json.loads(result)
-                except json.JSONDecodeError:
-                    logger.debug(f"Could not parse JSON from {config_file}")
+        for config_file in config_files:
+            try:
+                content = self.download_file(repo_id, config_file, False)
+                if content:
+                    try:
+                        config_data[config_file] = json.loads(content)
+                    except json.JSONDecodeError:
+                        logger.debug(f"Could not parse JSON from {config_file}")
+            except Exception:
+                continue
 
         return config_data if config_data else None
