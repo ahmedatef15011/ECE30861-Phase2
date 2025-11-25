@@ -2,7 +2,6 @@
 Main CLI application
 """
 
-import asyncio
 import os
 import re
 import subprocess
@@ -111,7 +110,7 @@ def process_urls(url_file: str) -> None:
         logger.info(f"Processing {len(contexts)} models")
 
         # run async processing
-        asyncio.run(_process_contexts_async(contexts))
+        _process_contexts(contexts)
 
     except FileNotFoundError:
         logger.error(f"URL file not found: {url_file}")
@@ -121,26 +120,33 @@ def process_urls(url_file: str) -> None:
         sys.exit(1)
 
 
-async def _process_contexts_async(contexts: List) -> None:
-    # async processing of model contexts
+def _process_contexts(contexts: List) -> None:
+    """Process model contexts and output results (synchronous version)."""
+    import json
+    from .output import format_output
+    
     scorer = MetricScorer()
-    outputter = NDJSONOutputter()
-    success_count = 0
-
-    # process each model context
+    
     for context in contexts:
         try:
-            result = await scorer.score_model(context)
-            outputter.output_single_result(result)
-            success_count += 1
+            # Call synchronous score_model
+            result = scorer.score_model(context)
+            
+            # Output result
+            output_data = {
+                "URL": context.model_url.url,
+                "NetScore": result.net_score,
+                "RampUp": result.ramp_up_time,
+                "Correctness": result.bus_factor,
+                "BusFactor": result.performance_claims,
+                "ResponsiveMaintainer": result.license_score,
+                "LicenseScore": result.size_score,
+            }
+            
+            print(json.dumps(output_data))
         except Exception as e:
             logger = get_logger()
             logger.error(f"Error scoring model {context.model_url.name}: {e}")
-
-    # exit with error if no models were successfully processed
-    if success_count == 0:
-        logger.error("No models were successfully processed")
-        sys.exit(1)
 
 
 def run_tests() -> None:
