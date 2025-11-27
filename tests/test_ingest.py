@@ -67,11 +67,11 @@ class TestIngestValidator:
         assert len(failing) == 0
 
     def test_quality_gate_some_fail(self, validator):
-        """Test quality gate fails when net_score < 0.5."""
+        """Test quality gate fails when net_score < 0.2."""
         audit_result = AuditResult(
             name="test/model",
             category="MODEL",
-            net_score=0.4,  # Below threshold
+            net_score=0.1,  # Below threshold
             net_score_latency=100,
             reproducibility=0.3,
             reproducibility_latency=50,
@@ -107,7 +107,7 @@ class TestIngestValidator:
         assert passes is False
         assert len(failing) == 1
         assert failing[0]["metric"] == "net_score"
-        assert failing[0]["score"] == 0.4
+        assert failing[0]["score"] == 0.1
 
     def test_quality_gate_edge_case_exactly_half(self, validator):
         """Test quality gate passes when net_score is exactly 0.5."""
@@ -250,7 +250,7 @@ class TestIngestValidator:
             mock_result = AuditResult(
                 name="unknown/model",
                 category="MODEL",
-                net_score=0.3,  # Below threshold
+                net_score=0.1,  # Below threshold
                 net_score_latency=100,
                 reproducibility=0.1,
                 reproducibility_latency=50,
@@ -392,9 +392,9 @@ class TestIngestQualityGateMetrics:
 
     def test_quality_gate_threshold_defined(self):
         """Test that quality gate threshold is properly defined."""
-        assert INGEST_NET_SCORE_THRESHOLD == 0.5
+        assert INGEST_NET_SCORE_THRESHOLD == 0.2
 
     def test_quality_gate_net_score_only(self):
         """Test that quality gate only checks net_score."""
         # Verify the threshold is for net score only
-        assert INGEST_NET_SCORE_THRESHOLD == 0.5
+        assert INGEST_NET_SCORE_THRESHOLD == 0.2
