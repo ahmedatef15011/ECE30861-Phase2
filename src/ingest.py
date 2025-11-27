@@ -1,7 +1,7 @@
 """Model ingest module for quality gate validation.
 
 Handles validation of HuggingFace models against quality metrics.
-Models must have net_score >= 0.5 to be ingestible.
+Models must have net_score >= 0.2 to be ingestible.
 """
 
 import logging
@@ -17,8 +17,8 @@ from .utils import measure_time
 logger = logging.getLogger(__name__)
 
 # Quality gate threshold for ingest
-# Net score must be >= 0.5 to pass
-INGEST_NET_SCORE_THRESHOLD = 0.5
+# Net score must be >= 0.2 to pass
+INGEST_NET_SCORE_THRESHOLD = 0.2
 
 
 class IngestValidator:
