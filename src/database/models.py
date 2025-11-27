@@ -204,6 +204,11 @@ class PackageScore(Base):
     performance_claims = Column(Float, nullable=True)
     license_score = Column(Float, nullable=True)
     size_score = Column(Float, nullable=True)
+    # Size score breakdown by device
+    size_score_raspberry_pi = Column(Float, nullable=True)
+    size_score_jetson_nano = Column(Float, nullable=True)
+    size_score_desktop_pc = Column(Float, nullable=True)
+    size_score_aws_server = Column(Float, nullable=True)
     dataset_quality = Column(Float, nullable=True)
     dataset_code_linkage = Column(Float, nullable=True)
     code_quality = Column(Float, nullable=True)

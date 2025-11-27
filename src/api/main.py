@@ -959,17 +959,41 @@ def create_app() -> FastAPI:
                         package_id=package.id,
                         ramp_up_time=scores.get("ramp_up_time", 0.0),
                         bus_factor=scores.get("bus_factor", 0.0),
-                        performance_claims=scores.get("performance_claims", 0.0),
+                        performance_claims=scores.get(
+                            "performance_claims", 0.0
+                        ),
                         license_score=scores.get("license", 0.6),
-                        dataset_quality=scores.get("dataset_quality", 0.0),
-                        dataset_code_linkage=scores.get("dataset_and_code_score", 0.0),
+                        dataset_quality=scores.get(
+                            "dataset_quality", 0.0
+                        ),
+                        dataset_code_linkage=scores.get(
+                            "dataset_and_code_score", 0.0
+                        ),
                         code_quality=scores.get("code_quality", 0.0),
-                        reproducibility=scores.get("reproducibility", 0.5),
+                        reproducibility=scores.get(
+                            "reproducibility", 0.5
+                        ),
                         reviewedness=scores.get("reviewedness", 0.6),
                         treescore=scores.get("treescore", 0.6),
+                        size_score=scores.get("size_score", 0.0),
+                        size_score_raspberry_pi=scores.get(
+                            "size_score_raspberry_pi", 0.0
+                        ),
+                        size_score_jetson_nano=scores.get(
+                            "size_score_jetson_nano", 0.0
+                        ),
+                        size_score_desktop_pc=scores.get(
+                            "size_score_desktop_pc", 0.0
+                        ),
+                        size_score_aws_server=scores.get(
+                            "size_score_aws_server", 0.0
+                        ),
                         net_score=scores.get("net_score", 0.0)
                     )
-                    logger.info(f"💾 Saved scores for rejected artifact {package.id}")
+                    logger.info(
+                        f"💾 Saved scores for rejected artifact "
+                        f"{package.id}"
+                    )
                 
                 # Still return 424 per OpenAPI spec
                 from fastapi import HTTPException
@@ -1066,21 +1090,39 @@ def create_app() -> FastAPI:
             logger.info("S3 storage disabled - storing metadata only")
         
         # Store the quality gate scores in database (only for models)
-        if artifact_type == "model" and validation_result and validation_result.get("all_scores"):
+        if (artifact_type == "model" and validation_result and
+                validation_result.get("all_scores")):
             scores = validation_result["all_scores"]
             crud.create_or_update_package_score(
                 db,
                 package_id=package.id,
                 ramp_up_time=scores.get("ramp_up_time", 0.0),
                 bus_factor=scores.get("bus_factor", 0.0),
-                performance_claims=scores.get("performance_claims", 0.0),
+                performance_claims=scores.get(
+                    "performance_claims", 0.0
+                ),
                 license_score=scores.get("license", 0.0),
                 dataset_quality=scores.get("dataset_quality", 0.0),
-                dataset_code_linkage=scores.get("dataset_and_code_score", 0.0),
+                dataset_code_linkage=scores.get(
+                    "dataset_and_code_score", 0.0
+                ),
                 code_quality=scores.get("code_quality", 0.0),
                 reproducibility=scores.get("reproducibility", 0.0),
                 reviewedness=scores.get("reviewedness", 0.0),
                 treescore=scores.get("treescore", 0.0),
+                size_score=scores.get("size_score", 0.0),
+                size_score_raspberry_pi=scores.get(
+                    "size_score_raspberry_pi", 0.0
+                ),
+                size_score_jetson_nano=scores.get(
+                    "size_score_jetson_nano", 0.0
+                ),
+                size_score_desktop_pc=scores.get(
+                    "size_score_desktop_pc", 0.0
+                ),
+                size_score_aws_server=scores.get(
+                    "size_score_aws_server", 0.0
+                ),
                 net_score=scores.get("net_score", 0.0)
             )
         
@@ -1245,20 +1287,34 @@ def create_app() -> FastAPI:
         )
         
         # For now, use same latency for all metrics (could track separately)
-        individual_latency = latency_seconds / 11.0 if latency_seconds > 0 else 0.0
+        individual_latency = (
+            latency_seconds / 11.0
+            if latency_seconds > 0
+            else 0.0
+        )
         
-        # Build size_score object with 4 platform scores
-        # We need to calculate these from size_score metric
-        # For now, estimate based on overall size_score
-        overall_size = scores.size_score if scores.size_score is not None else 0.5
-        
-        # Estimate platform-specific scores (smaller devices = lower scores)
-        # This is a simplified model - ideally calculated by SizeScoreMetric
+        # Build size_score object with 4 platform scores from database
         size_score_obj = {
-            "raspberry_pi": max(0.0, overall_size - 0.3),  # Smallest device
-            "jetson_nano": max(0.0, overall_size - 0.15),  # Small GPU device
-            "desktop_pc": overall_size,  # Match overall score
-            "aws_server": min(1.0, overall_size + 0.1)  # Largest deployment
+            "raspberry_pi": (
+                scores.size_score_raspberry_pi
+                if scores.size_score_raspberry_pi is not None
+                else 0.0
+            ),
+            "jetson_nano": (
+                scores.size_score_jetson_nano
+                if scores.size_score_jetson_nano is not None
+                else 0.0
+            ),
+            "desktop_pc": (
+                scores.size_score_desktop_pc
+                if scores.size_score_desktop_pc is not None
+                else 0.0
+            ),
+            "aws_server": (
+                scores.size_score_aws_server
+                if scores.size_score_aws_server is not None
+                else 0.0
+            )
         }
         
         # Return ModelRating per OpenAPI spec (lines 1063-1216)

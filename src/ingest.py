@@ -169,6 +169,29 @@ class IngestValidator:
             if score is not None:
                 scores[metric_name] = round(score, 3)
 
+        # Extract size_score breakdown (4 device scores)
+        if audit_result.size_score:
+            scores["size_score_raspberry_pi"] = round(
+                audit_result.size_score.raspberry_pi, 3
+            )
+            scores["size_score_jetson_nano"] = round(
+                audit_result.size_score.jetson_nano, 3
+            )
+            scores["size_score_desktop_pc"] = round(
+                audit_result.size_score.desktop_pc, 3
+            )
+            scores["size_score_aws_server"] = round(
+                audit_result.size_score.aws_server, 3
+            )
+            # Also include average as "size_score"
+            avg_size = (
+                audit_result.size_score.raspberry_pi +
+                audit_result.size_score.jetson_nano +
+                audit_result.size_score.desktop_pc +
+                audit_result.size_score.aws_server
+            ) / 4.0
+            scores["size_score"] = round(avg_size, 3)
+
         # Add net score
         scores["net_score"] = round(audit_result.net_score, 3)
 
