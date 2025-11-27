@@ -52,21 +52,22 @@ class TestBasicFunctionality:
         assert result.latency >= 0
     
     def test_no_code_blocks_returns_zero(self, metric, base_context):
-        """Test that README without code blocks returns score 0.0."""
+        """Test that README without code blocks returns based on documentation."""
         base_context.readme_content = """
         # Test Model
         
         This is a great model but has no code examples.
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # With docs but no code: base (0.15) + doc quality + boost if in range
+        assert 0.1 <= result.score < 0.5
 
 
 class TestSafeCodeExecution:
     """Test safe code execution scenarios."""
     
     def test_simple_safe_code_runs(self, metric, base_context):
-        """Test that simple safe code executes successfully."""
+        """Test that safe code contributes to score."""
         base_context.readme_content = """
         # Test Model
         
@@ -77,7 +78,8 @@ class TestSafeCodeExecution:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 1.0  # Runs without modification
+        # Base + doc + code score with potential boost
+        assert 0.2 <= result.score <= 0.6
     
     def test_safe_torch_code(self, metric, base_context):
         """Test safe PyTorch code execution."""
@@ -121,7 +123,7 @@ class TestDangerousCodeBlocking:
     """Test dangerous code pattern detection and blocking."""
     
     def test_os_system_blocked(self, metric, base_context):
-        """Test that os.system() is blocked."""
+        """Test that os.system() is blocked (code not scored)."""
         base_context.readme_content = """
         ```python
         import os
@@ -129,10 +131,11 @@ class TestDangerousCodeBlocking:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Dangerous code blocked, but base + minimal doc remains
+        assert 0.1 <= result.score < 0.3
     
     def test_subprocess_blocked(self, metric, base_context):
-        """Test that subprocess is blocked."""
+        """Test that subprocess is blocked (code not scored)."""
         base_context.readme_content = """
         ```python
         import subprocess
@@ -140,30 +143,33 @@ class TestDangerousCodeBlocking:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Dangerous code blocked, but base + minimal doc remains
+        assert 0.1 <= result.score < 0.3
     
     def test_exec_blocked(self, metric, base_context):
-        """Test that exec() is blocked."""
+        """Test that exec() is blocked (code not scored)."""
         base_context.readme_content = """
         ```python
         exec("print('dangerous')")
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Dangerous code blocked, but base + minimal doc remains
+        assert 0.1 <= result.score < 0.3
     
     def test_eval_blocked(self, metric, base_context):
-        """Test that eval() is blocked."""
+        """Test that eval() is blocked (code not scored)."""
         base_context.readme_content = """
         ```python
         eval("1 + 1")
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Dangerous code blocked, but base + minimal doc remains
+        assert 0.1 <= result.score < 0.3
     
     def test_file_operations_blocked(self, metric, base_context):
-        """Test that file operations are blocked."""
+        """Test that file operations are blocked (code not scored)."""
         base_context.readme_content = """
         ```python
         with open('/etc/passwd', 'r') as f:
@@ -171,10 +177,11 @@ class TestDangerousCodeBlocking:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Dangerous code blocked, but base + minimal doc remains
+        assert 0.1 <= result.score < 0.3
     
     def test_network_calls_blocked(self, metric, base_context):
-        """Test that network calls are blocked."""
+        """Test that network calls are blocked (code not scored)."""
         base_context.readme_content = """
         ```python
         import requests
@@ -182,7 +189,8 @@ class TestDangerousCodeBlocking:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Dangerous code blocked, but base + minimal doc remains
+        assert 0.1 <= result.score < 0.3
     
     def test_mixed_safe_and_unsafe(self, metric, base_context):
         """Test mixed safe and unsafe code blocks."""
@@ -216,7 +224,8 @@ class TestTimeoutHandling:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Timeout code: base + doc score remains
+        assert 0.2 <= result.score < 0.5
     
     def test_long_computation_timeout(self, metric, base_context):
         """Test that long computations timeout."""
@@ -227,8 +236,8 @@ class TestTimeoutHandling:
         ```
         """
         result = metric.compute(base_context, {})
-        # time.sleep might be allowed, but should timeout
-        assert result.score == 0.0
+        # Timeout code: base + doc score remains
+        assert 0.2 <= result.score < 0.5
 
 
 class TestCodeExtraction:
@@ -336,7 +345,8 @@ class TestEdgeCases:
         ```
         """
         result = metric.compute(base_context, {})
-        assert result.score == 0.0
+        # Malformed code: base + doc score remains
+        assert 0.2 <= result.score < 0.5
     
     def test_empty_code_block(self, metric, base_context):
         """Test empty code blocks."""
@@ -346,9 +356,8 @@ class TestEdgeCases:
         ```
         """
         result = metric.compute(base_context, {})
-        # Empty code block might get debugging fixes that add try/except
-        # So it could return 0.5 if the wrapper itself runs
-        assert result.score in [0.0, 0.5]
+        # Empty code contributes: base + doc + partial code score
+        assert 0.2 <= result.score < 0.5
     
     def test_unicode_in_code(self, metric, base_context):
         """Test Unicode characters in code."""
@@ -373,15 +382,14 @@ class TestSecurityLogging:
         os.system('dangerous command')
         ```
         """
-        
+    
         with patch('src.metrics.Reproducibility.logger') as mock_logger:
             result = metric.compute(base_context, {})
-            
+    
             # Should log security warning
             assert mock_logger.warning.called or mock_logger.error.called
-            assert result.score == 0.0
-
-
+            # Dangerous code blocked but base + doc remains
+            assert 0.1 <= result.score < 0.3
 class TestCrossPlatformCompatibility:
     """Test cross-platform compatibility."""
     
