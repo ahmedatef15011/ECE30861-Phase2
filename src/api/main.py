@@ -16,7 +16,7 @@ from src.api.config import settings
 from src.api.routes import users, packages, ratings, system
 from src.database.connection import init_db, reset_db
 from src.database.init_db import create_default_user
-from src.api.dependencies import get_db, get_optional_user, get_current_user
+from src.api.dependencies import get_db, get_optional_user, get_current_user, validate_id
 from src.database.models import Package, User
 from src.database import crud
 
@@ -1204,13 +1204,19 @@ def create_app() -> FastAPI:
         """
         from fastapi import HTTPException
         
-        # Get package by ID
+        # Validate ID format
+        validate_id(id)
+        
+        # Try to convert to int for database lookup
+        # If it's a valid format but not a number, treat as not found (404)
         try:
             package_id = int(id)
         except ValueError:
+            # Valid format (passed validate_id) but not an integer
+            # This means it won't exist in our integer-based DB
             raise HTTPException(
-                status_code=400,
-                detail="Invalid artifact ID format"
+                status_code=404,
+                detail=f"Artifact with ID {id} not found"
             )
         
         package = crud.get_package_by_id(db, package_id)
@@ -1442,6 +1448,9 @@ def create_app() -> FastAPI:
         # Log query
         logger.info(f"🔍 GET /artifacts/{artifact_type}/{id}")
         
+        # Validate ID format
+        validate_id(id)
+        
         # Note: OpenAPI spec says X-Authorization is required,
         # but we handle it optionally for testing purposes
         
@@ -1453,14 +1462,14 @@ def create_app() -> FastAPI:
                 detail=f"Invalid artifact type: {artifact_type}"
             )
         
-        # Get package by ID
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
         except ValueError:
-            logger.warning(f"❌ INVALID ID FORMAT: {id}")
+            logger.warning(f"❌ NOT FOUND: {id} (valid format but not in DB)")
             raise HTTPException(
-                status_code=400,
-                detail="Invalid artifact ID format"
+                status_code=404,
+                detail=f"Artifact with ID {id} not found"
             )
         
         package = crud.get_package_by_id(db, package_id)
@@ -1533,6 +1542,9 @@ def create_app() -> FastAPI:
         Returns:
             Redirect to artifact download URL
         """
+        # Validate ID format
+        validate_id(id)
+        
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
             raise HTTPException(
@@ -1540,13 +1552,13 @@ def create_app() -> FastAPI:
                 detail=f"Invalid artifact type: {artifact_type}"
             )
         
-        # Get package by ID
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
         except ValueError:
             raise HTTPException(
-                status_code=400,
-                detail="Invalid artifact ID format"
+                status_code=404,
+                detail=f"Artifact not found: {id}"
             )
         
         package = crud.get_package_by_id(db, package_id)
@@ -1627,6 +1639,9 @@ def create_app() -> FastAPI:
         """
         logger.info(f"🔄 UPDATE ARTIFACT: type={artifact_type}, id={id}")
         
+        # Validate ID format
+        validate_id(id)
+        
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
             raise HTTPException(
@@ -1634,13 +1649,13 @@ def create_app() -> FastAPI:
                 detail=f"Invalid artifact type: {artifact_type}"
             )
         
-        # Get package by ID
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
         except ValueError:
             raise HTTPException(
-                status_code=400,
-                detail="Invalid artifact ID format"
+                status_code=404,
+                detail=f"Artifact does not exist: {id}"
             )
         
         package = crud.get_package_by_id(db, package_id)
@@ -1703,6 +1718,9 @@ def create_app() -> FastAPI:
         """
         logger.info(f"🗑️  DELETE ARTIFACT: type={artifact_type}, id={id}")
         
+        # Validate ID format
+        validate_id(id)
+        
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
             raise HTTPException(
@@ -1710,13 +1728,13 @@ def create_app() -> FastAPI:
                 detail=f"Invalid artifact type: {artifact_type}"
             )
         
-        # Get package by ID
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
         except ValueError:
             raise HTTPException(
-                status_code=400,
-                detail="Invalid artifact ID format"
+                status_code=404,
+                detail=f"Artifact does not exist: {id}"
             )
         
         package = crud.get_package_by_id(db, package_id)
@@ -1802,6 +1820,9 @@ def create_app() -> FastAPI:
             f"deps={dependency}, user={user_info}"
         )
         
+        # Validate ID format
+        validate_id(id)
+        
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
             logger.warning(f"❌ Invalid artifact type: {artifact_type}")
@@ -1810,14 +1831,14 @@ def create_app() -> FastAPI:
                 detail=f"Invalid artifact type: {artifact_type}"
             )
         
-        # Get package by ID
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
             logger.info(f"   📋 Looking up package ID: {package_id}")
         except ValueError:
-            logger.warning(f"❌ Invalid ID format: {id}")
+            logger.warning(f"❌ NOT FOUND: {id} (valid format but not in DB)")
             raise HTTPException(
-                status_code=400,
+                status_code=404,
                 detail="Invalid artifact ID format"
             )
         
@@ -1921,12 +1942,15 @@ def create_app() -> FastAPI:
         """
         logger.info(f"🌳 LINEAGE QUERY: id={id}")
         
-        # Get package by ID
+        # Validate ID format
+        validate_id(id)
+        
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
         except ValueError:
             raise HTTPException(
-                status_code=400,
+                status_code=404,
                 detail="Invalid artifact ID format"
             )
         
@@ -1995,12 +2019,15 @@ def create_app() -> FastAPI:
         """
         logger.info(f"⚖️  LICENSE CHECK: id={id}, github={request.github_url}")
         
-        # Get package by ID
+        # Validate ID format
+        validate_id(id)
+        
+        # Try to convert to int for database lookup
         try:
             package_id = int(id)
         except ValueError:
             raise HTTPException(
-                status_code=400,
+                status_code=404,
                 detail="Invalid artifact ID format"
             )
         
