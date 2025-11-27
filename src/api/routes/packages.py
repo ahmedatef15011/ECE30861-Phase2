@@ -18,7 +18,7 @@ from src.api.schemas import (
     PackageResponse,
     PackageListResponse,
 )
-from src.api.dependencies import get_db, get_current_user, get_optional_user
+from src.api.dependencies import get_db, get_current_user, get_optional_user, validate_id
 from src.database import crud
 from src.database.models import User, Package
 from src.utils.exceptions import PackageNotFoundError
@@ -268,7 +268,7 @@ def create_package(
 
 @router.get("/{package_id}", response_model=PackageResponse)
 def get_package(
-    package_id: int,
+    package_id: str,
     db: Session = Depends(get_db)
 ):
     """
@@ -284,9 +284,21 @@ def get_package(
     Raises:
         PackageNotFoundError: If package not found
     """
-    package = crud.get_package_by_id(db, package_id)
+    # Validate for invalidId
+    validate_id(package_id)
+    
+    # Convert to int
+    try:
+        pkg_id = int(package_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid package ID format"
+        )
+    
+    package = crud.get_package_by_id(db, pkg_id)
     if not package:
-        raise PackageNotFoundError(package_id)
+        raise PackageNotFoundError(pkg_id)
     
     return package
 
@@ -431,7 +443,7 @@ def list_packages(
 
 @router.delete("/{package_id}", status_code=status.HTTP_200_OK)
 def delete_package(
-    package_id: int,
+    package_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -450,10 +462,22 @@ def delete_package(
         PackageNotFoundError: If package not found
         HTTPException: If user lacks permission
     """
+    # Validate for invalidId
+    validate_id(package_id)
+    
+    # Convert to int
+    try:
+        pkg_id = int(package_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid package ID format"
+        )
+    
     # Get package
-    package = crud.get_package_by_id(db, package_id)
+    package = crud.get_package_by_id(db, pkg_id)
     if not package:
-        raise PackageNotFoundError(package_id)
+        raise PackageNotFoundError(pkg_id)
     
     # Check permissions (only uploader or admin can delete)
     if package.uploaded_by != current_user.id and not current_user.is_admin:

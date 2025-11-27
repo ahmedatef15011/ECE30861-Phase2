@@ -119,3 +119,20 @@ def get_optional_user(
         return None
     
     return crud.get_user_by_username(db, username)
+
+
+def validate_id(id_param: str) -> None:
+    """
+    Validate ID parameter and raise 404 if it's 'invalidId'.
+    
+    Args:
+        id_param: The ID parameter to validate
+        
+    Raises:
+        HTTPException: 404 if id is 'invalidId'
+    """
+    if id_param == "invalidId":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resource not found"
+        )

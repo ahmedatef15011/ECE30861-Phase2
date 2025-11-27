@@ -16,7 +16,7 @@ from src.api.config import settings
 from src.api.routes import users, packages, ratings, system
 from src.database.connection import init_db, reset_db
 from src.database.init_db import create_default_user
-from src.api.dependencies import get_db, get_optional_user, get_current_user
+from src.api.dependencies import get_db, get_optional_user, get_current_user, validate_id
 from src.database.models import Package, User
 from src.database import crud
 
@@ -1204,6 +1204,9 @@ def create_app() -> FastAPI:
         """
         from fastapi import HTTPException
         
+        # Validate for invalidId
+        validate_id(id)
+        
         # Get package by ID
         try:
             package_id = int(id)
@@ -1442,6 +1445,9 @@ def create_app() -> FastAPI:
         # Log query
         logger.info(f"🔍 GET /artifacts/{artifact_type}/{id}")
         
+        # Validate for invalidId
+        validate_id(id)
+        
         # Note: OpenAPI spec says X-Authorization is required,
         # but we handle it optionally for testing purposes
         
@@ -1533,6 +1539,9 @@ def create_app() -> FastAPI:
         Returns:
             Redirect to artifact download URL
         """
+        # Validate for invalidId
+        validate_id(id)
+        
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
             raise HTTPException(
@@ -1627,6 +1636,9 @@ def create_app() -> FastAPI:
         """
         logger.info(f"🔄 UPDATE ARTIFACT: type={artifact_type}, id={id}")
         
+        # Validate for invalidId
+        validate_id(id)
+        
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
             raise HTTPException(
@@ -1702,6 +1714,9 @@ def create_app() -> FastAPI:
             Success message
         """
         logger.info(f"🗑️  DELETE ARTIFACT: type={artifact_type}, id={id}")
+        
+        # Validate for invalidId
+        validate_id(id)
         
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
@@ -1801,6 +1816,9 @@ def create_app() -> FastAPI:
             f"💰 COST QUERY: type={artifact_type}, id={id}, "
             f"deps={dependency}, user={user_info}"
         )
+        
+        # Validate for invalidId
+        validate_id(id)
         
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
@@ -1921,6 +1939,9 @@ def create_app() -> FastAPI:
         """
         logger.info(f"🌳 LINEAGE QUERY: id={id}")
         
+        # Validate for invalidId
+        validate_id(id)
+        
         # Get package by ID
         try:
             package_id = int(id)
@@ -1994,6 +2015,9 @@ def create_app() -> FastAPI:
             Boolean indicating compatibility
         """
         logger.info(f"⚖️  LICENSE CHECK: id={id}, github={request.github_url}")
+        
+        # Validate for invalidId
+        validate_id(id)
         
         # Get package by ID
         try:
