@@ -284,16 +284,16 @@ def get_package(
     Raises:
         PackageNotFoundError: If package not found
     """
-    # Validate for invalidId
+    # Validate ID format
     validate_id(package_id)
     
-    # Convert to int
+    # Try to convert to int for database lookup
     try:
         pkg_id = int(package_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid package ID format"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Package not found: {package_id}"
         )
     
     package = crud.get_package_by_id(db, pkg_id)
@@ -462,16 +462,16 @@ def delete_package(
         PackageNotFoundError: If package not found
         HTTPException: If user lacks permission
     """
-    # Validate for invalidId
+    # Validate ID format
     validate_id(package_id)
     
-    # Convert to int
+    # Try to convert to int for database lookup
     try:
         pkg_id = int(package_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid package ID format"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Package not found: {package_id}"
         )
     
     # Get package

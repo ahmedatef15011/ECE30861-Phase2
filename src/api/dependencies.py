@@ -123,16 +123,22 @@ def get_optional_user(
 
 def validate_id(id_param: str) -> None:
     """
-    Validate ID parameter and raise 404 if it's 'invalidId'.
+    Validate ID parameter format according to OpenAPI spec.
+    
+    IDs must match the pattern: ^[a-zA-Z0-9\-]+$
+    (alphanumeric characters and hyphens only)
     
     Args:
         id_param: The ID parameter to validate
         
     Raises:
-        HTTPException: 404 if id is 'invalidId'
+        HTTPException: 400 if id format is invalid (doesn't match pattern)
     """
-    if id_param == "invalidId":
+    import re
+    
+    # OpenAPI spec pattern for ArtifactID: ^[a-zA-Z0-9\-]+$
+    if not re.match(r'^[a-zA-Z0-9\-]+$', id_param):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resource not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid artifact ID format"
         )
