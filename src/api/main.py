@@ -1755,12 +1755,13 @@ def create_app() -> FastAPI:
         id: str,
         dependency: bool = Query(False),
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Get the cost of an artifact (BASELINE).
         
-        **Authentication Required**: Must provide valid JWT token via Bearer authentication.
+        **Authentication Optional**: Can provide JWT token via Bearer
+        authentication.
         
         Cost is measured in KB (kilobytes) based on content size.
         Formula: standalone_cost = max(1.0, content_size_bytes / 1024.0)
@@ -1770,15 +1771,15 @@ def create_app() -> FastAPI:
         Args:
             artifact_type: Type of artifact (model/dataset/code)
             id: Artifact ID
-            dependency: Include dependencies in cost calculation (default: False)
+            dependency: Include dependencies in cost calculation
+                (default: False)
             db: Database session
-            current_user: Authenticated user (from JWT token)
+            current_user: Optional authenticated user (from JWT token)
             
         Returns:
             Cost information with standalone_cost and total_cost in KB
             
         Raises:
-            HTTPException 401/403: Authentication failed or invalid token
             HTTPException 400: Invalid artifact type or ID
             HTTPException 404: Artifact not found or type mismatch
             
@@ -1792,10 +1793,14 @@ def create_app() -> FastAPI:
               → total_cost = 10.0 KB
               
             - Content size = 0 bytes, dependency=false
-              → standalone_cost = max(1.0, 0/1024) = 1.0 KB (minimum enforced)
+              → standalone_cost = max(1.0, 0/1024) = 1.0 KB (minimum)
               → total_cost = 1.0 KB
         """
-        logger.info(f"💰 COST QUERY: type={artifact_type}, id={id}, deps={dependency}, user={current_user.username}")
+        user_info = current_user.username if current_user else "anonymous"
+        logger.info(
+            f"💰 COST QUERY: type={artifact_type}, id={id}, "
+            f"deps={dependency}, user={user_info}"
+        )
         
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
@@ -1824,18 +1829,23 @@ def create_app() -> FastAPI:
                 detail=f"Artifact does not exist: {id}"
             )
         
-        logger.info(f"   ✓ Found package: name={package.name}, type={getattr(package, 'artifact_type', 'model')}")
+        pkg_type = getattr(package, 'artifact_type', 'model')
+        logger.info(f"   ✓ Found package: name={package.name}, "
+                    f"type={pkg_type}")
         
         # Check artifact type matches
         pkg_artifact_type = getattr(package, 'artifact_type', 'model')
         if pkg_artifact_type != artifact_type:
-            logger.warning(f"❌ Type mismatch: expected {artifact_type}, got {pkg_artifact_type}")
+            logger.warning(
+                f"❌ Type mismatch: expected {artifact_type}, "
+                f"got {pkg_artifact_type}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Artifact {id} is not of type {artifact_type}"
             )
         
-        # Calculate cost based on content size (using file_size_bytes as proxy for content size)
+        # Calculate cost based on content size (using file_size_bytes
+        # as proxy for content size)
         # Cost is measured in KB with minimum of 1.0 KB
         content_size_bytes = getattr(package, 'file_size_bytes', 0)
         logger.info(f"   📊 Content size: {content_size_bytes} bytes")
@@ -1846,7 +1856,8 @@ def create_app() -> FastAPI:
         logger.info(f"   💵 Calculated standalone_cost: {standalone_cost} KB")
         
         # If dependency=true, double the cost (simple approximation)
-        # Formula: total_cost = standalone_cost * 2.0 if dependency else standalone_cost
+        # Formula: total_cost = standalone_cost * 2.0 if dependency
+        # else standalone_cost
         total_cost = standalone_cost * 2.0 if dependency else standalone_cost
         
         # Always return both standalone_cost and total_cost fields
@@ -1859,7 +1870,8 @@ def create_app() -> FastAPI:
         }
         logger.info(f"   📦 Response: {result}")
         
-        logger.info(f"✅ COST: {standalone_cost} KB (total: {total_cost} KB) → returning {result}")
+        logger.info(f"✅ COST: {standalone_cost} KB "
+                    f"(total: {total_cost} KB) → {result}")
         return result
 
     
