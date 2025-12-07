@@ -89,10 +89,14 @@ class ReviewednessMetric(BaseMetric):
                 # Calculate reviewedness from git history
                 reviewed_lines, total_lines = self._analyze_git_history(repo_path)
                 
-                # Check for error condition (both are -1)
+                # Check for error condition (both are -1) - try fallback
                 if reviewed_lines == -1 and total_lines == -1:
-                    logger.warning("Git operation failed")
-                    return -1.0
+                    logger.warning(
+                        "Git operation failed, trying fallback scoring"
+                    )
+                    fallback = FallbackScorer(context.readme_content)
+                    score, details = fallback.get_reviewedness_fallback_score()
+                    return score
                 
                 if total_lines == 0:
                     logger.warning("No code lines found in repository")
@@ -113,8 +117,11 @@ class ReviewednessMetric(BaseMetric):
             return score
 
         except Exception as e:
-            logger.error(f"Error calculating reviewedness: {e}", exc_info=True)
-            return -1.0
+            logger.error(f"Error calculating reviewedness: {e}, trying fallback")
+            # Try fallback on exception instead of returning -1
+            fallback = FallbackScorer(context.readme_content)
+            score, details = fallback.get_reviewedness_fallback_score()
+            return score
         finally:
             git_inspector.cleanup()
 
