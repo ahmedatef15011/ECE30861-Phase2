@@ -73,22 +73,23 @@ class TestReviewednessMetric:
         """Test that metric has correct name."""
         assert reviewedness_metric.name == "reviewedness"
 
-    def test_no_github_repo_returns_minus_one(
+    def test_no_github_repo_returns_baseline(
         self, reviewedness_metric, model_context_without_github
     ):
-        """Test that models without GitHub repos return -1."""
+        """Test that models without GitHub repos return baseline credit."""
         result = reviewedness_metric.compute(
             model_context_without_github, {}
         )
 
         assert isinstance(result, MetricResult)
-        assert result.score == -1.0
+        # Baseline credit for HuggingFace-hosted models
+        assert result.score >= 0.10
         assert result.latency >= 0
 
-    def test_empty_code_repos_returns_minus_one(
+    def test_empty_code_repos_returns_baseline(
         self, reviewedness_metric
     ):
-        """Test that empty code_repos list returns -1."""
+        """Test that empty code_repos list returns baseline credit."""
         model_url = ParsedURL(
             url="https://huggingface.co/test/model",
             category=URLCategory.MODEL,
@@ -101,14 +102,15 @@ class TestReviewednessMetric:
 
         result = reviewedness_metric.compute(context, {})
 
-        assert result.score == -1.0
+        # Baseline credit for HuggingFace-hosted models
+        assert result.score >= 0.10
 
     @patch('src.metrics.reviewedness.GitInspector')
-    def test_clone_failure_returns_minus_one(
+    def test_clone_failure_returns_baseline(
         self, mock_git_inspector, reviewedness_metric,
         model_context_with_github
     ):
-        """Test that clone failure returns -1."""
+        """Test that clone failure returns baseline credit."""
         # Mock GitInspector to return None (clone failed)
         mock_instance = Mock()
         mock_instance.clone_repo.return_value = None
@@ -119,7 +121,8 @@ class TestReviewednessMetric:
             model_context_with_github, {}
         )
 
-        assert result.score == -1.0
+        # Baseline credit for HuggingFace-hosted models
+        assert result.score >= 0.10
 
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
@@ -328,8 +331,8 @@ mno345|Direct commit no PR
             model_context_with_github, {}
         )
 
-        # Should return -1 on error
-        assert result.score == -1.0
+        # Should return baseline credit on error (fallback scoring)
+        assert result.score >= 0.10
 
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
@@ -354,8 +357,8 @@ mno345|Direct commit no PR
             model_context_with_github, {}
         )
 
-        # Should return -1 on error
-        assert result.score == -1.0
+        # Should return baseline credit on error (fallback scoring)
+        assert result.score >= 0.10
 
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')

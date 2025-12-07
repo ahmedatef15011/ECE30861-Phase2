@@ -61,7 +61,8 @@ class FallbackScorer:
     # Maximum scores for fallback (lower than full resource scores)
     MAX_DATASET_FALLBACK = 0.65
     MAX_CODE_FALLBACK = 0.65
-    MAX_REVIEWEDNESS_FALLBACK = 0.60
+    # Reviewedness cap increased from 0.60 for more realistic scores
+    MAX_REVIEWEDNESS_FALLBACK = 0.80
     
     # LLM weight in blended scoring (40% LLM, 60% deterministic)
     LLM_WEIGHT = 0.4
@@ -495,10 +496,18 @@ class FallbackScorer:
         - Paper citations (implies peer review)
         
         Returns:
-            Tuple of (score, details_dict) or (-1.0, details) if truly N/A
+            Tuple of (score, details_dict)
         """
+        # Give baseline credit for HuggingFace-hosted models without README
+        # HuggingFace has some level of content moderation
         if not self.readme_content:
-            return -1.0, {"reason": "No README - metric not applicable"}
+            baseline = 0.10
+            return baseline, {
+                "method": "huggingface_baseline",
+                "reason": "No README available",
+                "note": "Baseline credit for HuggingFace-hosted model",
+                "score": baseline
+            }
 
         # Try LLM analysis first
         llm_score = -1.0
@@ -604,11 +613,30 @@ class FallbackScorer:
             score += 0.15
             details["indicators_found"].append("paper_citation")
 
-        # If no indicators found at all, return -1 (truly not applicable)
+        # Check for contribution guidelines (0.0 - 0.10)
+        if self._has_contribution_guidelines():
+            score += 0.10
+            details["indicators_found"].append("contribution_guidelines")
+
+        # Check for CI/CD badges (0.0 - 0.10)
+        if self._has_ci_cd_badges():
+            score += 0.10
+            details["indicators_found"].append("ci_cd_badges")
+
+        # Check for code review references (0.0 - 0.10)
+        if self._has_code_review_references():
+            score += 0.10
+            details["indicators_found"].append("code_review_references")
+
+        # If no indicators found, give small baseline instead of -1.0
+        # Models shouldn't be completely penalized for missing metadata
         if score == 0.0:
-            return -1.0, {
-                "reason": "No review indicators found",
-                "note": "Metric not applicable"
+            baseline = 0.15
+            return baseline, {
+                "method": "baseline_fallback",
+                "reason": "No review indicators found in README",
+                "note": "Baseline credit for HuggingFace-hosted model",
+                "score": baseline
             }
 
         final_score = min(self.MAX_REVIEWEDNESS_FALLBACK, score)
@@ -684,6 +712,62 @@ class FallbackScorer:
             'proceedings',
             'conference',
             'journal',
+        ]
+        return any(ind in self.readme_lower for ind in indicators)
+
+    def _has_contribution_guidelines(self) -> bool:
+        """Check for contribution guidelines (implies code review process)."""
+        indicators = [
+            'contributing',
+            'contribution guideline',
+            'pull request',
+            'code of conduct',
+            'codeowners',
+            'how to contribute',
+            'development guide',
+            'pr template',
+            'issue template',
+        ]
+        return any(ind in self.readme_lower for ind in indicators)
+
+    def _has_ci_cd_badges(self) -> bool:
+        """Check for CI/CD badges (implies automated review/testing)."""
+        indicators = [
+            'github.com/.*/(workflows|actions)',  # GitHub Actions
+            'travis-ci',
+            'circleci',
+            'jenkins',
+            'azure-pipelines',
+            'codecov',
+            'coveralls',
+            'shields.io',
+            'badge',
+            'build passing',
+            'build: passing',
+            'tests passing',
+            'ci:',
+        ]
+        # For regex patterns
+        for ind in indicators:
+            if '.*' in ind or '/' in ind:
+                if re.search(ind, self.readme_lower):
+                    return True
+            elif ind in self.readme_lower:
+                return True
+        return False
+
+    def _has_code_review_references(self) -> bool:
+        """Check for explicit code review references."""
+        indicators = [
+            'code review',
+            'reviewed by',
+            'approved by',
+            'review process',
+            'peer review',
+            'lgtm',
+            'sign-off',
+            'maintainer',
+            'core team',
         ]
         return any(ind in self.readme_lower for ind in indicators)
 

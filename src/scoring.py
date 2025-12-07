@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 import yaml
 
 from .hf_api import HuggingFaceAPI
+from .lineage import LineageExtractor
 from .logging_utils import get_logger
 from .metrics.bus_factor import BusFactorMetric
 from .metrics.code_quality import CodeQualityMetric
@@ -15,6 +16,7 @@ from .metrics.ramp_up import RampUpTimeMetric
 from .metrics.Reproducibility import ReproducibilityMetric
 from .metrics.reviewedness import ReviewednessMetric
 from .metrics.size_score import SizeScoreMetric
+from .metrics.treescore import TreeScoreMetric
 from .models import AuditResult, MetricResult, ModelContext, ParsedURL, URLCategory
 from .utils import measure_time
 
@@ -124,12 +126,20 @@ class MetricScorer:
             dataset_quality_latency=metric_results["dataset_quality"].latency,
             code_quality=metric_results["code_quality"].score,
             code_quality_latency=metric_results["code_quality"].latency,
-            reproducibility=metric_results.get("reproducibility", reproducibility_default).score,
-            reproducibility_latency=metric_results.get("reproducibility", reproducibility_default).latency,
-            reviewedness=metric_results.get("reviewedness", reviewedness_default).score,
-            reviewedness_latency=metric_results.get("reviewedness", reviewedness_default).latency,
-            treescore=0.0,  # Placeholder for now (not implemented yet)
-            treescore_latency=0,
+            reproducibility=metric_results.get(
+                "reproducibility", reproducibility_default
+            ).score,
+            reproducibility_latency=metric_results.get(
+                "reproducibility", reproducibility_default
+            ).latency,
+            reviewedness=metric_results.get(
+                "reviewedness", reviewedness_default
+            ).score,
+            reviewedness_latency=metric_results.get(
+                "reviewedness", reviewedness_default
+            ).latency,
+            treescore=self._calculate_treescore(context).score,
+            treescore_latency=self._calculate_treescore(context).latency,
         )
 
     def _enrich_context(self, context: ModelContext):
@@ -308,6 +318,38 @@ class MetricScorer:
         
         return results
 
+    def _calculate_treescore(self, context: ModelContext) -> MetricResult:
+        """
+        Calculate TreeScore based on parent model scores from lineage.
+        
+        TreeScore = Average of net_scores of all parent models.
+        Returns 0.0 if no parents found or scores unavailable.
+        """
+        try:
+            treescore_metric = TreeScoreMetric(hf_api=self.hf_api)
+            
+            # Extract lineage from context
+            lineage_extractor = LineageExtractor(hf_api=self.hf_api)
+            lineage_graph = lineage_extractor.extract_lineage(
+                model_url=context.model_url,
+                config_data=context.config_data,
+                readme_content=context.readme_content,
+                max_depth=2,
+                recursive=False,  # Non-recursive for performance
+            )
+            
+            # Calculate treescore using the lineage graph
+            result = treescore_metric.calculate(
+                context=context,
+                lineage_graph=lineage_graph,
+            )
+            
+            logger.info(f"TreeScore calculated: {result.score:.4f}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error calculating TreeScore: {e}")
+            return MetricResult(score=0.0, latency=0)
 
     def _calculate_net_score(self, metric_results: Dict[str, Any]) -> float:
         # calculate weighted net score from individual metrics

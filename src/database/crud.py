@@ -203,6 +203,45 @@ def get_package_by_name_version(db: Session, name: str, version: str) -> Optiona
     ).first()
 
 
+def get_packages_by_name(db: Session, name: str) -> List[Package]:
+    """
+    Get all packages matching a name (any version).
+    
+    Supports multiple name formats for parent model lookup:
+    - Exact match: "trained-gender"
+    - With owner prefix: "crangana-trained-gender"
+    - Just the repo part of "owner/repo": extracts "repo"
+    
+    Args:
+        db: Database session
+        name: Package name to search for
+        
+    Returns:
+        List of packages matching the name
+    """
+    # Extract just the repo name if it's in owner/repo format
+    if "/" in name:
+        name = name.split("/")[-1]
+    
+    # Try exact match first
+    packages = db.query(Package).filter(Package.name == name).all()
+    if packages:
+        return packages
+    
+    # Try with owner-repo format (owner/repo -> owner-repo)
+    # This handles cases like "microsoft/resnet-50" -> "microsoft-resnet-50"
+    if "-" in name:
+        # Also try just the last part after the last hyphen for cases like
+        # "microsoft-resnet-50" where we want to match "resnet-50"
+        parts = name.split("-", 1)
+        if len(parts) == 2:
+            packages = db.query(Package).filter(Package.name == parts[1]).all()
+            if packages:
+                return packages
+    
+    return []
+
+
 def get_packages(
     db: Session,
     skip: int = 0,

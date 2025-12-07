@@ -218,15 +218,24 @@ class ReviewednessMetric(BaseMetric):
         Detection strategies:
         1. Commit message contains PR reference (e.g., "#123", "PR #456")
         2. Commit is a merge commit with PR reference
-        3. Check if commit is referenced in any PR merge commit
+        3. GitHub squash merge patterns
+        4. Co-authored commits (multiple contributors = review)
+        5. Signed-off-by trailer (DCO review process)
+        6. Conventional commit format (indicates structured process)
+        7. Reviewed-by/Acked-by trailers
         """
+        
+        msg_lower = commit_message.lower()
         
         # Strategy 1: Check for PR references in commit message
         pr_patterns = [
-            r'#(\d+)',           # #123
-            r'PR\s*#(\d+)',      # PR #123
-            r'Merge pull request #(\d+)',  # Merge pull request #123
-            r'\(#(\d+)\)',       # Fixes (#123)
+            r'#(\d+)',                      # #123
+            r'PR\s*#(\d+)',                 # PR #123
+            r'Merge pull request #(\d+)',   # Merge pull request #123
+            r'\(#(\d+)\)',                  # Fixes (#123) or squash merge
+            r'pull request \d+',            # pull request 123
+            r'MR\s*[#!](\d+)',              # GitLab MR #123 or MR !123
+            r'!(\d+)',                      # GitLab style !123
         ]
         
         for pattern in pr_patterns:
@@ -234,7 +243,41 @@ class ReviewednessMetric(BaseMetric):
                 return True
 
         # Strategy 2: Check if it's a merge commit
-        if commit_message.lower().startswith('merge'):
+        if msg_lower.startswith('merge'):
+            return True
+        
+        # Strategy 3: GitHub squash merge patterns (often end with PR number)
+        # e.g., "feat: add new feature (#123)"
+        if re.search(r'\(\s*#\d+\s*\)\s*$', commit_message):
+            return True
+        
+        # Strategy 4: Co-authored commits indicate collaboration/review
+        if 'co-authored-by:' in msg_lower:
+            return True
+        
+        # Strategy 5: Signed-off-by indicates DCO/review process
+        if 'signed-off-by:' in msg_lower:
+            return True
+        
+        # Strategy 6: Reviewed-by or Acked-by trailers
+        review_trailers = [
+            'reviewed-by:', 'acked-by:', 'tested-by:', 'approved-by:'
+        ]
+        for trailer in review_trailers:
+            if trailer in msg_lower:
+                return True
+        
+        # Strategy 7: Conventional commits often indicate structured process
+        # feat:, fix:, chore:, docs:, style:, refactor:, test:, etc.
+        conventional_prefixes = (
+            r'^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)'
+        )
+        conventional_pattern = conventional_prefixes + r'(\(.+\))?:'
+        if re.match(conventional_pattern, commit_message, re.IGNORECASE):
+            return True
+        
+        # Strategy 8: Revert commits indicate review process
+        if msg_lower.startswith('revert'):
             return True
 
         return False
