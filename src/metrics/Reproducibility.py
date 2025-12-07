@@ -14,6 +14,11 @@ Metric Definition:
         - Code runs in isolated sandbox with timeout protection
         - File operations, system commands, and network calls blocked
         - Cross-platform support (Windows, Linux, macOS)
+    
+    LLM Enhancement:
+        - Uses AWS Bedrock to analyze code quality when available
+        - Falls back to deterministic analysis if LLM unavailable
+        - LLM provides deeper semantic understanding of code issues
 """
 
 import re
@@ -22,17 +27,30 @@ import subprocess
 import tempfile
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from .base import BaseMetric
 from ..models import MetricResult, ModelContext
 from ..utils import measure_time
+
+# Import LLM scoring helpers (graceful fallback if unavailable)
+try:
+    from .llm_scoring import (
+        analyze_code_reproducibility,
+        analyze_readme_quality as llm_analyze_readme,
+        LLM_ENABLED,
+    )
+    HAS_LLM = True
+except ImportError:
+    HAS_LLM = False
+    LLM_ENABLED = False
 
 logger = logging.getLogger(__name__)
 
 # Dangerous operations to block
 # Note: Shell-specific patterns (>, |, &&, ;, `, $() ) are removed to avoid
 # false positives with legitimate Python syntax (comparison operators, bitwise ops, etc.)
+
 DANGEROUS_PATTERNS = [
     r'os\.system',           # System commands
     r'subprocess\.',         # Subprocess calls
@@ -367,6 +385,9 @@ class ReproducibilityMetric(BaseMetric):
     ) -> float:
         """
         Calculate continuous score from code blocks with granular factors.
+        
+        Now enhanced with LLM analysis when available for deeper
+        semantic understanding of code quality.
 
         Creates NATURAL DISTRIBUTION across 0.0-0.75 range:
         - Single simple block: 0.10-0.20
@@ -375,6 +396,7 @@ class ReproducibilityMetric(BaseMetric):
         - Professional examples: 0.60-0.75
 
         Multi-dimensional evaluation:
+        - LLM semantic analysis (if available): weighted 40%
         - Number/count of code blocks (+0.0-0.20)
         - Code complexity/length (+0.0-0.15)
         - Syntactic validity (+0.0-0.10)
@@ -392,6 +414,96 @@ class ReproducibilityMetric(BaseMetric):
         if not code_blocks:
             return 0.0
 
+        # Try LLM analysis first (if available)
+        llm_score = self._get_llm_code_score(code_blocks, model_id)
+        
+        # Calculate deterministic score
+        deterministic_score = self._calculate_deterministic_code_score(
+            code_blocks, model_id
+        )
+        
+        # Blend scores: 40% LLM, 60% deterministic (if LLM available)
+        if llm_score >= 0:
+            # LLM succeeded - blend scores
+            final_score = (0.4 * llm_score) + (0.6 * deterministic_score)
+            logger.info(
+                f"Blended code score for {model_id}: "
+                f"LLM={llm_score:.2f}, Det={deterministic_score:.2f}, "
+                f"Final={final_score:.2f}"
+            )
+        else:
+            # LLM unavailable - use deterministic only
+            final_score = deterministic_score
+            logger.debug(
+                f"Using deterministic score only for {model_id}: "
+                f"{final_score:.2f}"
+            )
+        
+        return min(0.90, final_score)
+    
+    def _get_llm_code_score(
+        self, code_blocks: List[str], model_id: str
+    ) -> float:
+        """
+        Get LLM-based code reproducibility score.
+        
+        Args:
+            code_blocks: List of code blocks to analyze
+            model_id: Model ID for logging
+            
+        Returns:
+            float: Score 0.0-1.0, or -1.0 if LLM unavailable
+        """
+        if not HAS_LLM or not LLM_ENABLED:
+            return -1.0
+        
+        try:
+            # Combine code blocks for analysis
+            combined_code = "\n\n# --- Next Code Block ---\n\n".join(
+                code_blocks[:5]  # Limit to 5 blocks
+            )
+            
+            # Truncate if too long
+            if len(combined_code) > 4000:
+                combined_code = combined_code[:4000] + "\n# ... [truncated]"
+            
+            score, details = analyze_code_reproducibility(
+                code=combined_code,
+                model_name=model_id
+            )
+            
+            if score >= 0:
+                logger.info(
+                    f"LLM code analysis for {model_id}: "
+                    f"score={score:.2f}, method={details.get('method')}"
+                )
+                # Store LLM details for potential debugging
+                self._last_llm_details = details
+                return score
+            else:
+                logger.debug(
+                    f"LLM analysis returned fallback for {model_id}: "
+                    f"{details}"
+                )
+                return -1.0
+                
+        except Exception as e:
+            logger.warning(f"LLM code analysis failed for {model_id}: {e}")
+            return -1.0
+    
+    def _calculate_deterministic_code_score(
+        self, code_blocks: List[str], model_id: str
+    ) -> float:
+        """
+        Calculate deterministic code score (original algorithm).
+        
+        Args:
+            code_blocks: List of safe code blocks
+            model_id: Model ID for logging
+
+        Returns:
+            float: Score contribution from 0 to ~0.75
+        """
         score = 0.0
 
         # Factor 1: Code block count (0.0-0.30)
@@ -452,6 +564,7 @@ class ReproducibilityMetric(BaseMetric):
         return min(0.90, score)
 
     def _evaluate_code_diversity(self, code_blocks: List[str]) -> float:
+
         """
         Evaluate diversity of code blocks (different patterns/functions).
 

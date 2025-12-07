@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from src.api.config import settings
-from src.api.routes import users, packages, ratings, system
+from src.api.routes import users, packages, ratings, system, llm
 from src.database.connection import init_db, reset_db
 from src.database.init_db import create_default_user
 from src.api.dependencies import get_db, get_optional_user, get_current_user, validate_id
@@ -174,6 +174,13 @@ def create_app() -> FastAPI:
         system.router,
         prefix=f"{settings.API_V1_PREFIX}/system",
         tags=["system"]
+    )
+    
+    # LLM endpoints (AWS Bedrock)
+    app.include_router(
+        llm.router,
+        prefix=f"{settings.API_V1_PREFIX}/llm",
+        tags=["llm"]
     )
     
     # Root endpoint

@@ -8,14 +8,34 @@ Philosophy:
 - README content often contains valuable information
 - Partial credit encourages incremental improvement
 - Fallback scores capped below full resource scores (0.65 max vs 1.0)
+
+LLM Enhancement:
+- Uses AWS Bedrock for semantic analysis when available
+- Provides deeper understanding of README content
+- Falls back gracefully to deterministic scoring if LLM unavailable
 """
 
 import re
 import logging
+import os
 from typing import Dict, Any, Optional, Tuple, List
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+# Import LLM scoring helpers (graceful fallback if unavailable)
+try:
+    from .llm_scoring import (
+        analyze_dataset_from_readme,
+        analyze_code_from_readme,
+        analyze_reviewedness_from_readme,
+        LLM_ENABLED,
+    )
+    HAS_LLM = True
+except ImportError:
+    HAS_LLM = False
+    LLM_ENABLED = False
+    logger.debug("LLM scoring module not available - using deterministic only")
 
 
 class ResourceAvailability(Enum):
@@ -30,6 +50,8 @@ class FallbackScorer:
     """
     Fallback scoring when primary resources are missing.
     
+    Now enhanced with LLM analysis for deeper semantic understanding.
+    
     Use this when:
     - No datasets are linked but README might describe training data
     - No GitHub repo linked but README has code examples
@@ -40,17 +62,42 @@ class FallbackScorer:
     MAX_DATASET_FALLBACK = 0.65
     MAX_CODE_FALLBACK = 0.65
     MAX_REVIEWEDNESS_FALLBACK = 0.60
+    
+    # LLM weight in blended scoring (40% LLM, 60% deterministic)
+    LLM_WEIGHT = 0.4
+    DETERMINISTIC_WEIGHT = 0.6
 
-    def __init__(self, readme_content: Optional[str] = None):
+    def __init__(
+        self,
+        readme_content: Optional[str] = None,
+        model_name: str = "unknown",
+        use_llm: bool = True
+    ):
+        """
+        Initialize fallback scorer.
+        
+        Args:
+            readme_content: README/model card content
+            model_name: Name of the model (for logging)
+            use_llm: Whether to use LLM analysis (default: True)
+        """
         self.readme_content = readme_content or ""
         self.readme_lower = self.readme_content.lower()
+        self.model_name = model_name
+        self.use_llm = use_llm and HAS_LLM and LLM_ENABLED
+        
+        # Store LLM analysis results for debugging
+        self._llm_results: Dict[str, Any] = {}
 
     # =========================================================================
     # DATASET QUALITY FALLBACK
     # =========================================================================
+
     def get_dataset_fallback_score(self) -> Tuple[float, Dict[str, Any]]:
         """
         Calculate dataset quality when no linked datasets found.
+        
+        Now enhanced with LLM analysis for deeper semantic understanding.
         
         Looks for dataset information in README:
         - Dataset names/references
@@ -64,6 +111,60 @@ class FallbackScorer:
         if not self.readme_content:
             return 0.0, {"reason": "No README content"}
 
+        # Try LLM analysis first
+        llm_score = -1.0
+        llm_details = {}
+        if self.use_llm:
+            llm_score, llm_details = self._get_llm_dataset_score()
+            self._llm_results["dataset"] = llm_details
+        
+        # Calculate deterministic score
+        det_score, det_details = self._get_deterministic_dataset_score()
+        
+        # Blend scores if LLM available
+        if llm_score >= 0:
+            final_score = (
+                self.LLM_WEIGHT * llm_score +
+                self.DETERMINISTIC_WEIGHT * det_score
+            )
+            final_score = min(self.MAX_DATASET_FALLBACK, final_score)
+            
+            details = {
+                "method": "llm_enhanced_fallback",
+                "llm_score": llm_score,
+                "deterministic_score": det_score,
+                "blended_score": final_score,
+                "llm_details": llm_details,
+                "deterministic_details": det_details,
+            }
+            logger.info(
+                f"Dataset fallback (LLM-enhanced) for {self.model_name}: "
+                f"LLM={llm_score:.2f}, Det={det_score:.2f}, "
+                f"Final={final_score:.2f}"
+            )
+        else:
+            final_score = det_score
+            details = det_details
+            logger.info(
+                f"Dataset fallback (deterministic) for {self.model_name}: "
+                f"{final_score:.2f}"
+            )
+        
+        return final_score, details
+    
+    def _get_llm_dataset_score(self) -> Tuple[float, Dict[str, Any]]:
+        """Get LLM-based dataset quality score from README analysis."""
+        try:
+            return analyze_dataset_from_readme(
+                readme_content=self.readme_content,
+                model_name=self.model_name
+            )
+        except Exception as e:
+            logger.warning(f"LLM dataset analysis failed: {e}")
+            return -1.0, {"error": str(e)}
+    
+    def _get_deterministic_dataset_score(self) -> Tuple[float, Dict[str, Any]]:
+        """Calculate deterministic dataset fallback score."""
         score = 0.0
         details = {
             "method": "readme_fallback",
@@ -108,11 +209,8 @@ class FallbackScorer:
         details["max_possible"] = self.MAX_DATASET_FALLBACK
         details["note"] = "Partial credit - no linked datasets found"
 
-        logger.info(
-            f"Dataset fallback score: {final_score:.2f} - "
-            f"{details['indicators_found']}"
-        )
         return final_score, details
+
 
     def _extract_dataset_mentions(self) -> List[str]:
         """Extract mentioned dataset names from README."""
@@ -202,6 +300,8 @@ class FallbackScorer:
         """
         Calculate code quality when no linked GitHub repo found.
         
+        Now enhanced with LLM analysis for deeper understanding.
+        
         Looks for code-related information in README:
         - Code snippets
         - Installation instructions
@@ -214,6 +314,60 @@ class FallbackScorer:
         if not self.readme_content:
             return 0.3, {"reason": "No README content", "default": True}
 
+        # Try LLM analysis first
+        llm_score = -1.0
+        llm_details = {}
+        if self.use_llm:
+            llm_score, llm_details = self._get_llm_code_score()
+            self._llm_results["code"] = llm_details
+        
+        # Calculate deterministic score
+        det_score, det_details = self._get_deterministic_code_score()
+        
+        # Blend scores if LLM available
+        if llm_score >= 0:
+            final_score = (
+                self.LLM_WEIGHT * llm_score +
+                self.DETERMINISTIC_WEIGHT * det_score
+            )
+            final_score = min(self.MAX_CODE_FALLBACK, final_score)
+            
+            details = {
+                "method": "llm_enhanced_fallback",
+                "llm_score": llm_score,
+                "deterministic_score": det_score,
+                "blended_score": final_score,
+                "llm_details": llm_details,
+                "deterministic_details": det_details,
+            }
+            logger.info(
+                f"Code fallback (LLM-enhanced) for {self.model_name}: "
+                f"LLM={llm_score:.2f}, Det={det_score:.2f}, "
+                f"Final={final_score:.2f}"
+            )
+        else:
+            final_score = det_score
+            details = det_details
+            logger.info(
+                f"Code fallback (deterministic) for {self.model_name}: "
+                f"{final_score:.2f}"
+            )
+        
+        return final_score, details
+    
+    def _get_llm_code_score(self) -> Tuple[float, Dict[str, Any]]:
+        """Get LLM-based code quality score from README analysis."""
+        try:
+            return analyze_code_from_readme(
+                readme_content=self.readme_content,
+                model_name=self.model_name
+            )
+        except Exception as e:
+            logger.warning(f"LLM code analysis failed: {e}")
+            return -1.0, {"error": str(e)}
+    
+    def _get_deterministic_code_score(self) -> Tuple[float, Dict[str, Any]]:
+        """Calculate deterministic code fallback score."""
         score = 0.0
         details = {
             "method": "readme_fallback",
@@ -258,10 +412,6 @@ class FallbackScorer:
         details["max_possible"] = self.MAX_CODE_FALLBACK
         details["note"] = "Partial credit - no linked code repository found"
 
-        logger.info(
-            f"Code fallback score: {final_score:.2f} - "
-            f"{details['indicators_found']}"
-        )
         return final_score, details
 
     def _count_code_blocks(self) -> int:
@@ -335,6 +485,8 @@ class FallbackScorer:
         """
         Calculate reviewedness when no linked GitHub repo found.
         
+        Now enhanced with LLM analysis for deeper understanding.
+        
         Looks for collaboration/review indicators:
         - Multiple contributors mentioned
         - Acknowledgments
@@ -348,6 +500,79 @@ class FallbackScorer:
         if not self.readme_content:
             return -1.0, {"reason": "No README - metric not applicable"}
 
+        # Try LLM analysis first
+        llm_score = -1.0
+        llm_details = {}
+        if self.use_llm:
+            llm_score, llm_details = self._get_llm_reviewedness_score()
+            self._llm_results["reviewedness"] = llm_details
+        
+        # Calculate deterministic score
+        det_score, det_details = self._get_deterministic_reviewedness_score()
+        
+        # If deterministic returns -1 (N/A), check if LLM can provide score
+        if det_score < 0:
+            if llm_score >= 0:
+                # LLM found something deterministic missed
+                final_score = min(self.MAX_REVIEWEDNESS_FALLBACK, llm_score)
+                details = {
+                    "method": "llm_only_fallback",
+                    "llm_score": llm_score,
+                    "llm_details": llm_details,
+                    "note": "LLM found indicators deterministic analysis missed"
+                }
+                logger.info(
+                    f"Reviewedness fallback (LLM-only) for {self.model_name}: "
+                    f"{final_score:.2f}"
+                )
+                return final_score, details
+            else:
+                return det_score, det_details
+        
+        # Blend scores if LLM available
+        if llm_score >= 0:
+            final_score = (
+                self.LLM_WEIGHT * llm_score +
+                self.DETERMINISTIC_WEIGHT * det_score
+            )
+            final_score = min(self.MAX_REVIEWEDNESS_FALLBACK, final_score)
+            
+            details = {
+                "method": "llm_enhanced_fallback",
+                "llm_score": llm_score,
+                "deterministic_score": det_score,
+                "blended_score": final_score,
+                "llm_details": llm_details,
+                "deterministic_details": det_details,
+            }
+            logger.info(
+                f"Reviewedness fallback (LLM-enhanced) for {self.model_name}: "
+                f"LLM={llm_score:.2f}, Det={det_score:.2f}, "
+                f"Final={final_score:.2f}"
+            )
+        else:
+            final_score = det_score
+            details = det_details
+            logger.info(
+                f"Reviewedness fallback (deterministic) for {self.model_name}: "
+                f"{final_score:.2f}"
+            )
+        
+        return final_score, details
+    
+    def _get_llm_reviewedness_score(self) -> Tuple[float, Dict[str, Any]]:
+        """Get LLM-based reviewedness score from README analysis."""
+        try:
+            return analyze_reviewedness_from_readme(
+                readme_content=self.readme_content,
+                model_name=self.model_name
+            )
+        except Exception as e:
+            logger.warning(f"LLM reviewedness analysis failed: {e}")
+            return -1.0, {"error": str(e)}
+    
+    def _get_deterministic_reviewedness_score(self) -> Tuple[float, Dict[str, Any]]:
+        """Calculate deterministic reviewedness fallback score."""
         score = 0.0
         details = {
             "method": "readme_fallback",
@@ -391,10 +616,6 @@ class FallbackScorer:
         details["max_possible"] = self.MAX_REVIEWEDNESS_FALLBACK
         details["note"] = "Partial credit - inferred from README"
 
-        logger.info(
-            f"Reviewedness fallback score: {final_score:.2f} - "
-            f"{details['indicators_found']}"
-        )
         return final_score, details
 
     def _has_multiple_contributors(self) -> bool:
@@ -465,3 +686,23 @@ class FallbackScorer:
             'journal',
         ]
         return any(ind in self.readme_lower for ind in indicators)
+
+    # =========================================================================
+    # LLM RESULTS ACCESS
+    # =========================================================================
+    def get_llm_results(self) -> Dict[str, Any]:
+        """
+        Get all LLM analysis results collected during scoring.
+        
+        Returns:
+            Dict with LLM results for each metric type (dataset, code, reviewedness)
+        """
+        return {
+            "llm_enabled": self.use_llm,
+            "model_name": self.model_name,
+            "results": self._llm_results.copy()
+        }
+    
+    def is_llm_available(self) -> bool:
+        """Check if LLM is available for scoring."""
+        return HAS_LLM and LLM_ENABLED

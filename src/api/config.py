@@ -23,9 +23,18 @@ class Settings:
     # CORS
     CORS_ORIGINS: list = ["*"]  # TODO: Restrict in production
     
-    # AWS (for future use)
-    AWS_REGION: Optional[str] = os.getenv("AWS_REGION")
+    # AWS Configuration
+    AWS_REGION: Optional[str] = os.getenv("AWS_REGION", "us-east-1")
     S3_BUCKET: Optional[str] = os.getenv("S3_BUCKET")
+    
+    # AWS Bedrock LLM Configuration
+    BEDROCK_MODEL_ID: str = os.getenv(
+        "BEDROCK_MODEL_ID", 
+        "anthropic.claude-3-haiku-20240307-v1:0"
+    )
+    BEDROCK_MAX_TOKENS: int = int(os.getenv("BEDROCK_MAX_TOKENS", "4096"))
+    BEDROCK_TEMPERATURE: float = float(os.getenv("BEDROCK_TEMPERATURE", "0.3"))
+    BEDROCK_ENABLED: bool = os.getenv("BEDROCK_ENABLED", "true").lower() == "true"
     
     # Default admin user (as per spec)
     DEFAULT_ADMIN_USERNAME: str = "ece30861defaultadminuser"

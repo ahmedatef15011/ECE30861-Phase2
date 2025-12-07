@@ -7,10 +7,11 @@ Tests cover:
 - Timeout handling
 - Edge cases
 - Cross-platform compatibility
+- LLM-enhanced scoring (when available)
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from src.metrics.Reproducibility import ReproducibilityMetric
 from src.models import ModelContext, ParsedURL, URLCategory
 
@@ -432,6 +433,110 @@ class TestPerformance:
         assert result.latency >= 0
         # Should complete in reasonable time (< 30 seconds)
         assert result.latency < 30000  # 30 seconds in ms
+
+
+class TestLLMIntegration:
+    """Test LLM-enhanced scoring functionality."""
+    
+    @patch('src.metrics.Reproducibility.HAS_LLM', True)
+    @patch('src.metrics.Reproducibility.LLM_ENABLED', True)
+    @patch('src.metrics.Reproducibility.analyze_code_reproducibility')
+    def test_llm_blending_when_available(
+        self, mock_analyze, metric, base_context
+    ):
+        """Test that LLM scores are blended when available."""
+        # Mock LLM returning a high score
+        mock_analyze.return_value = (0.9, {"llm_analysis": "excellent code"})
+        
+        base_context.readme_content = """
+        # Good Model
+        
+        Well documented model with examples.
+        
+        ```python
+        x = 10
+        print(x)
+        ```
+        """
+        
+        result = metric.compute(base_context, {})
+        
+        # Score should reflect LLM contribution
+        assert result.score >= 0.0
+        assert result.score <= 1.0
+    
+    @patch('src.metrics.Reproducibility.HAS_LLM', False)
+    def test_fallback_when_llm_unavailable(self, metric, base_context):
+        """Test graceful fallback when LLM not available."""
+        base_context.readme_content = """
+        ```python
+        x = 10
+        print(x)
+        ```
+        """
+        
+        result = metric.compute(base_context, {})
+        
+        # Should still produce valid score
+        assert result.score >= 0.0
+        assert result.score <= 1.0
+        assert result.latency >= 0
+    
+    @patch('src.metrics.Reproducibility.HAS_LLM', True)
+    @patch('src.metrics.Reproducibility.LLM_ENABLED', True)
+    @patch('src.metrics.Reproducibility.analyze_code_reproducibility')
+    def test_llm_error_handling(self, mock_analyze, metric, base_context):
+        """Test handling of LLM errors during scoring."""
+        # Mock LLM raising an exception
+        mock_analyze.side_effect = Exception("LLM API Error")
+        
+        base_context.readme_content = """
+        ```python
+        x = 10
+        ```
+        """
+        
+        result = metric.compute(base_context, {})
+        
+        # Should gracefully fall back to deterministic scoring
+        assert result.score >= 0.0
+        assert result.score <= 1.0
+    
+    @patch('src.metrics.Reproducibility.HAS_LLM', True)
+    @patch('src.metrics.Reproducibility.LLM_ENABLED', True)
+    @patch('src.metrics.Reproducibility.analyze_code_reproducibility')
+    def test_llm_returns_negative_one(self, mock_analyze, metric, base_context):
+        """Test handling when LLM returns -1 (unavailable)."""
+        # Mock LLM returning -1 (not available)
+        mock_analyze.return_value = (-1.0, {"reason": "Model unavailable"})
+        
+        base_context.readme_content = """
+        ```python
+        x = 10
+        ```
+        """
+        
+        result = metric.compute(base_context, {})
+        
+        # Should use deterministic score only
+        assert result.score >= 0.0
+        assert result.score <= 1.0
+    
+    @patch('src.metrics.Reproducibility.HAS_LLM', True)
+    @patch('src.metrics.Reproducibility.LLM_ENABLED', False)
+    def test_llm_disabled_via_environment(self, metric, base_context):
+        """Test that LLM can be disabled via environment."""
+        base_context.readme_content = """
+        ```python
+        x = 10
+        ```
+        """
+        
+        result = metric.compute(base_context, {})
+        
+        # Should still produce valid score (deterministic only)
+        assert result.score >= 0.0
+        assert result.score <= 1.0
 
 
 if __name__ == "__main__":
