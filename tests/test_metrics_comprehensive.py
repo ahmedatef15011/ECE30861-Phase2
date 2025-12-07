@@ -205,7 +205,8 @@ def test_dataset_quality_no_datasets(config):
     )
 
     result = metric.compute(context, config)
-    assert result.score == 0.3  # Default when no datasets
+    # With fallback scoring: no README content = 0.0
+    assert result.score == 0.0
 
 
 def test_dataset_quality_with_mock_hf_dataset(config):
@@ -265,7 +266,8 @@ def test_code_quality_no_repos(config):
     )
 
     result = metric.compute(context, config)
-    assert result.score == 0.5  # Default medium score
+    # With fallback scoring: no README content = 0.3 default
+    assert result.score == 0.3
 
 
 def test_code_quality_with_mock_analysis(config):
