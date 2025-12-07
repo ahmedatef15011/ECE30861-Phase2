@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 # Check if LLM is enabled (default to True on AWS, False locally)
 LLM_ENABLED = os.getenv("BEDROCK_ENABLED", "true").lower() == "true"
 
+# Check if LLM dependencies are available
+try:
+    from src.llm import get_bedrock_client
+    HAS_LLM = True
+except ImportError:
+    HAS_LLM = False
+    get_bedrock_client = None  # type: ignore
+
 
 def get_llm_client():
     """Get Bedrock client with error handling.
@@ -27,16 +35,12 @@ def get_llm_client():
     Returns:
         BedrockClient or None if unavailable
     """
-    if not LLM_ENABLED:
-        logger.debug("LLM disabled via BEDROCK_ENABLED=false")
+    if not HAS_LLM or not LLM_ENABLED:
+        logger.debug("LLM disabled or unavailable")
         return None
     
     try:
-        from src.llm import get_bedrock_client
         return get_bedrock_client()
-    except ImportError as e:
-        logger.warning(f"LLM module not available: {e}")
-        return None
     except Exception as e:
         logger.warning(f"Failed to initialize LLM client: {e}")
         return None

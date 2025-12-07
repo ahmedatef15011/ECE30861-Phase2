@@ -21,6 +21,7 @@ from src.metrics.llm_scoring import (
     analyze_reviewedness_from_readme,
     HAS_LLM,
     LLM_ENABLED,
+    get_llm_client,
 )
 
 
@@ -113,6 +114,12 @@ class TestModuleAvailability:
     def test_llm_enabled_is_bool(self):
         """Test LLM_ENABLED is a boolean."""
         assert isinstance(LLM_ENABLED, bool)
+    
+    def test_get_llm_client_returns_client_or_none(self):
+        """Test get_llm_client returns client or None."""
+        client = get_llm_client()
+        # Should return either a client or None (never raise)
+        assert client is None or hasattr(client, 'generate')
 
 
 # =============================================================================
