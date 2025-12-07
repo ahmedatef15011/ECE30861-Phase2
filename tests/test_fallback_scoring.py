@@ -522,7 +522,7 @@ class TestWeightsAndConstants:
         
         assert scorer.MAX_DATASET_FALLBACK == 0.65
         assert scorer.MAX_CODE_FALLBACK == 0.65
-        assert scorer.MAX_REVIEWEDNESS_FALLBACK == 0.70
+        assert scorer.MAX_REVIEWEDNESS_FALLBACK == 0.60
 
 
 # =============================================================================
