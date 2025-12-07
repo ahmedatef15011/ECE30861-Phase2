@@ -4,6 +4,7 @@ from ..hf_api import HuggingFaceAPI
 from ..models import MetricResult, ModelContext
 from ..utils import measure_time
 from .base import BaseMetric
+from .fallback_scoring import FallbackScorer
 
 
 class DatasetQualityMetric(BaseMetric):
@@ -30,12 +31,11 @@ class DatasetQualityMetric(BaseMetric):
         Score = (#fields_filled / 4) for description, size/#samples, license,
         and benchmark references.
         """
-        #iIf no datasets are linked, check README for dataset information
+        # If no datasets are linked, use enhanced fallback scoring
         if not context.datasets:
-            if context.readme_content:
-                return self._analyze_readme_dataset_quality(context.readme_content)
-            else:
-                return 0.3  # default when no datasets
+            fallback = FallbackScorer(context.readme_content)
+            score, details = fallback.get_dataset_fallback_score()
+            return score
 
         total_score = 0.0
         datasets_analyzed = 0
@@ -51,11 +51,10 @@ class DatasetQualityMetric(BaseMetric):
                 datasets_analyzed += 1
 
         if datasets_analyzed == 0:
-            # non HF datasets - check README fallback
-            if context.readme_content:
-                return self._analyze_readme_dataset_quality(context.readme_content)
-            else:
-                return 0.3  # default
+            # Non-HF datasets - use enhanced fallback scoring
+            fallback = FallbackScorer(context.readme_content)
+            score, details = fallback.get_dataset_fallback_score()
+            return score
 
         return total_score / datasets_analyzed
 

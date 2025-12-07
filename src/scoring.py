@@ -187,7 +187,102 @@ class MetricScorer:
             except Exception as e:
                 logger.error(f"Error extracting GitHub repo from README: {e}")
         
-        logger.info(f"Enriched context for {context.model_url.name}")
+        # Extract HuggingFace datasets from README (if available)
+        if context.readme_content:
+            try:
+                # Look for HuggingFace dataset URLs in README
+                # Patterns for huggingface.co/datasets/owner/dataset-name
+                dataset_patterns = [
+                    r'https?://huggingface\.co/datasets/([^/\s\)]+)/([^/\s\)\]]+)',
+                    r'huggingface\.co/datasets/([^/\s\)]+)/([^/\s\)\]]+)',
+                    # Also match markdown links like [dataset](https://huggingface.co/datasets/...)
+                    r'\[.*?\]\(https?://huggingface\.co/datasets/([^/\s\)]+)/([^/\s\)\]]+)\)',
+                ]
+                
+                found_datasets = set()  # Track unique datasets
+                for pattern in dataset_patterns:
+                    matches = re.findall(pattern, context.readme_content)
+                    for match in matches:
+                        owner, dataset_name = match
+                        # Clean up dataset name (remove trailing punctuation)
+                        dataset_name = re.sub(r'[.,;:\)\]#].*$', '', dataset_name)
+                        
+                        dataset_key = f"{owner}/{dataset_name}"
+                        if dataset_key not in found_datasets:
+                            found_datasets.add(dataset_key)
+                            
+                            dataset_url = f"https://huggingface.co/datasets/{owner}/{dataset_name}"
+                            dataset_parsed = ParsedURL(
+                                url=dataset_url,
+                                category=URLCategory.DATASET,
+                                name=dataset_name,
+                                platform="huggingface",
+                                owner=owner,
+                                repo=dataset_name,
+                            )
+                            context.datasets.append(dataset_parsed)
+                            logger.info(f"Found HuggingFace dataset in README: {dataset_url}")
+                
+                # Also check for dataset mentions in model card metadata (YAML front matter)
+                # Pattern: datasets:\n  - owner/dataset-name
+                yaml_dataset_pattern = r'datasets:\s*\n((?:\s*-\s*[^\n]+\n?)+)'
+                yaml_match = re.search(yaml_dataset_pattern, context.readme_content)
+                if yaml_match:
+                    dataset_list = yaml_match.group(1)
+                    # Extract individual dataset entries
+                    dataset_entries = re.findall(r'-\s*([^\n\s]+)', dataset_list)
+                    for entry in dataset_entries:
+                        entry = entry.strip()
+                        # Skip invalid entries (YAML separators, empty, etc.)
+                        if not entry or entry in ('--', '---', '-'):
+                            continue
+                        if entry and '/' in entry:
+                            parts = entry.split('/')
+                            if len(parts) >= 2:
+                                owner, dataset_name = parts[0], parts[1]
+                                # Skip if owner or name is empty/invalid
+                                if not owner or not dataset_name or owner == '-':
+                                    continue
+                                dataset_key = f"{owner}/{dataset_name}"
+                                if dataset_key not in found_datasets:
+                                    found_datasets.add(dataset_key)
+                                    
+                                    dataset_url = f"https://huggingface.co/datasets/{owner}/{dataset_name}"
+                                    dataset_parsed = ParsedURL(
+                                        url=dataset_url,
+                                        category=URLCategory.DATASET,
+                                        name=dataset_name,
+                                        platform="huggingface",
+                                        owner=owner,
+                                        repo=dataset_name,
+                                    )
+                                    context.datasets.append(dataset_parsed)
+                                    logger.info(f"Found dataset in model card metadata: {dataset_url}")
+                        elif entry and '/' not in entry:
+                            # Single name dataset (e.g., "imagenet-1k")
+                            # Must be alphanumeric with hyphens/underscores
+                            if not re.match(r'^[a-zA-Z0-9][\w\-]*$', entry):
+                                continue
+                            dataset_key = entry
+                            if dataset_key not in found_datasets:
+                                found_datasets.add(dataset_key)
+                                
+                                dataset_url = f"https://huggingface.co/datasets/{entry}"
+                                dataset_parsed = ParsedURL(
+                                    url=dataset_url,
+                                    category=URLCategory.DATASET,
+                                    name=entry,
+                                    platform="huggingface",
+                                    owner=None,
+                                    repo=entry,
+                                )
+                                context.datasets.append(dataset_parsed)
+                                logger.info(f"Found dataset in model card metadata: {dataset_url}")
+                                
+            except Exception as e:
+                logger.error(f"Error extracting datasets from README: {e}")
+        
+        logger.info(f"Enriched context for {context.model_url.name} - Found {len(context.code_repos)} code repos, {len(context.datasets)} datasets")
 
     # compute all metrics sequentially
     def _compute_metrics(

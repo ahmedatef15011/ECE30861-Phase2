@@ -4,6 +4,8 @@ from ..git_inspect import GitInspector
 from ..models import MetricResult, ModelContext
 from ..utils import measure_time
 from .base import BaseMetric
+from .fallback_scoring import FallbackScorer
+
 
 class CodeQualityMetric(BaseMetric):
     """Metric for evaluating quality of linked code repositories."""
@@ -40,7 +42,10 @@ class CodeQualityMetric(BaseMetric):
                 return 0.6  # Has files, likely some code structure
         
         if not context.code_repos:
-            return 0.5  # Default when no code repos
+            # Use enhanced fallback scoring based on README
+            fallback = FallbackScorer(context.readme_content)
+            score, details = fallback.get_code_fallback_score()
+            return score
 
         git_inspector = GitInspector()
         try:
@@ -52,7 +57,10 @@ class CodeQualityMetric(BaseMetric):
         finally:
             git_inspector.cleanup()
 
-        return 0.5  # default
+        # Fallback if cloning failed
+        fallback = FallbackScorer(context.readme_content)
+        score, details = fallback.get_code_fallback_score()
+        return score
 
     def _fast_code_quality_check(self, repo_path: str) -> float:
         """Fast code quality estimation without running linters."""

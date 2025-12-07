@@ -9,6 +9,7 @@ from ..git_inspect import GitInspector
 from ..models import MetricResult, ModelContext
 from ..utils import measure_time
 from .base import BaseMetric
+from .fallback_scoring import FallbackScorer
 from ..logging_utils import get_logger
 
 logger = get_logger()
@@ -66,8 +67,15 @@ class ReviewednessMetric(BaseMetric):
         
         # Check if there's a GitHub repository
         if not context.code_repos:
-            logger.info("No GitHub repository found, returning -1")
-            return -1.0
+            # Use fallback scoring based on README content
+            logger.info("No GitHub repository found, trying fallback scoring")
+            fallback = FallbackScorer(context.readme_content)
+            score, details = fallback.get_reviewedness_fallback_score()
+            if score == -1.0:
+                logger.info("No review indicators in README, returning -1")
+            else:
+                logger.info(f"Reviewedness fallback score: {score:.2f}")
+            return score
 
         git_inspector = GitInspector()
         try:
@@ -96,9 +104,13 @@ class ReviewednessMetric(BaseMetric):
                 )
                 return score
 
-            # If we couldn't clone any repo
-            logger.warning("Could not clone any code repository")
-            return -1.0
+            # If we couldn't clone any repo, try fallback
+            logger.warning(
+                "Could not clone any code repository, trying fallback"
+            )
+            fallback = FallbackScorer(context.readme_content)
+            score, details = fallback.get_reviewedness_fallback_score()
+            return score
 
         except Exception as e:
             logger.error(f"Error calculating reviewedness: {e}", exc_info=True)
