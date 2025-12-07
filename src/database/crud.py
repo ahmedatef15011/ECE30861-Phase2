@@ -248,6 +248,10 @@ def get_packages(
 list_packages = get_packages
 
 
+def get_all_packages(db: Session) -> List[Package]:
+    """Get all packages without pagination."""
+    return db.query(Package).all()
+
 
 def delete_package(db: Session, package_id: int) -> bool:
     """Delete a package by ID."""

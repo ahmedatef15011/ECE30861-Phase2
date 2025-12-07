@@ -24,20 +24,7 @@ from src.utils.exceptions import UnauthorizedError
 MAX_REGEX_LENGTH = 256
 
 # Maximum time for regex execution (seconds)
-REGEX_TIMEOUT = 1.0
-
-# Dangerous regex patterns that can cause ReDoS
-REDOS_PATTERNS = [
-    r'\(\.\*\)\+',           # (.*)+
-    r'\(\.\+\)\+',           # (.+)+
-    r'\([^)]*\+[^)]*\)\+',   # (a+)+ style patterns
-    r'\([^)]*\*[^)]*\)\+',   # (a*)+
-    r'\([^)]*\+[^)]*\)\*',   # (a+)*
-    r'\([^)]*\|[^)]*\)\+',   # (a|a)+ style
-    r'(\.\*){2,}',           # .*.* or more
-    r'(\.\+){2,}',           # .+.+ or more
-    r'\(\?[^)]*\)\+',        # non-capturing groups with +
-]
+REGEX_TIMEOUT = 0.5
 
 
 class RegexTimeoutError(Exception):
@@ -45,34 +32,42 @@ class RegexTimeoutError(Exception):
     pass
 
 
-def _is_potentially_dangerous_regex(pattern: str) -> bool:
+def _is_redos_pattern(pattern: str) -> bool:
     """
-    Check if a regex pattern is potentially dangerous (ReDoS vulnerable).
+    Check if a regex pattern is a known ReDoS (Regular Expression Denial of Service) pattern.
+    
+    These specific patterns can cause exponential backtracking:
+    - (a+)+$  - nested quantifiers
+    - (a|aa)*$ - overlapping alternations with quantifier
+    - (a{1,99999}){1,99999}$ - nested high repetition counts
     
     Args:
         pattern: The regex pattern to check
         
     Returns:
-        True if the pattern is potentially dangerous
+        True if the pattern is a known ReDoS pattern
     """
-    # Check for common ReDoS patterns
-    for redos_pattern in REDOS_PATTERNS:
-        if re.search(redos_pattern, pattern):
-            return True
-    
-    # Check for nested quantifiers like (a+)+, (a*)+, etc.
-    # This is a simplified check for nested repetition
-    nested_quantifier = r'\([^)]*[\+\*][^)]*\)[\+\*]'
-    if re.search(nested_quantifier, pattern):
+    # Pattern 1: Nested quantifiers like (a+)+, (a+)*, (a*)+, (a*)*
+    # Matches: (x+)+, (x+)*, (x*)+, (x*)*, where x is any character/group
+    nested_quantifier_pattern = r'\([^)]*[+*][^)]*\)[+*]'
+    if re.search(nested_quantifier_pattern, pattern):
         return True
     
-    # Check for overlapping alternations like (a|a|aa)+
-    # Count characters that could cause exponential backtracking
-    quantifier_count = len(re.findall(r'[\+\*\?]', pattern))
-    group_count = len(re.findall(r'\(', pattern))
+    # Pattern 2: Overlapping alternations with quantifier like (a|aa)+, (a|aa)*
+    # This causes exponential backtracking on strings like "aaaaaaaaaaaa!"
+    overlapping_alt_pattern = r'\([^)]*\|[^)]*\)[+*]'
+    if re.search(overlapping_alt_pattern, pattern):
+        return True
     
-    # If there are many quantifiers in groups, it's suspicious
-    if quantifier_count > 3 and group_count > 2:
+    # Pattern 3: Very high repetition counts like {1,99999} or {99999}
+    # This can cause memory exhaustion
+    high_rep_pattern = r'\{[\d,]*(?:9999|10000|99999|100000)[\d,]*\}'
+    if re.search(high_rep_pattern, pattern):
+        return True
+    
+    # Pattern 4: Nested repetition with braces like (a{n}){m} where n*m is large
+    nested_brace_pattern = r'\([^)]*\{[^}]+\}[^)]*\)\{[^}]+\}'
+    if re.search(nested_brace_pattern, pattern):
         return True
     
     return False
@@ -80,29 +75,22 @@ def _is_potentially_dangerous_regex(pattern: str) -> bool:
 
 def validate_regex_pattern(pattern: str) -> str:
     """
-    Validate and sanitize a regex pattern for safe execution.
+    Validate a regex pattern for safe execution.
     
-    This function checks for:
+    Checks for:
     1. Pattern length limits
-    2. Valid regex syntax
-    3. ReDoS vulnerability patterns
+    2. Valid regex syntax  
+    3. Known ReDoS vulnerability patterns
     
     Args:
         pattern: The regex pattern to validate
         
     Returns:
-        The validated pattern (possibly sanitized)
+        The validated pattern
         
     Raises:
         HTTPException: 400 if the pattern is invalid or dangerous
     """
-    # Check length
-    if len(pattern) > MAX_REGEX_LENGTH:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Regex pattern too long (max {MAX_REGEX_LENGTH} characters)"
-        )
-    
     # Handle special case of "*" (list all)
     if pattern == "*":
         return pattern
@@ -111,23 +99,30 @@ def validate_regex_pattern(pattern: str) -> str:
     if not pattern or pattern.strip() == "":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty regex pattern"
+            detail="There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
+        )
+    
+    # Check length
+    if len(pattern) > MAX_REGEX_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
         )
     
     # Try to compile the regex to check for syntax errors
     try:
         re.compile(pattern)
-    except re.error as e:
+    except re.error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid regex pattern: {str(e)}"
+            detail="There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
         )
     
-    # Check for dangerous patterns that could cause ReDoS
-    if _is_potentially_dangerous_regex(pattern):
+    # Check for known ReDoS patterns
+    if _is_redos_pattern(pattern):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Regex pattern contains potentially dangerous constructs"
+            detail="There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
         )
     
     return pattern
