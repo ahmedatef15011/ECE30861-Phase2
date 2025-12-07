@@ -411,23 +411,39 @@ def list_packages(
     Returns:
         Paginated list of packages
     """
+    from src.api.dependencies import validate_regex_pattern
+    
     # Calculate offset
     offset = (page - 1) * page_size
+    
+    # Validate regex pattern if provided to prevent ReDoS
+    validated_pattern = None
+    if name_pattern:
+        try:
+            validated_pattern = validate_regex_pattern(name_pattern)
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid regex pattern"
+            )
     
     # Get packages with regex filtering
     packages = crud.get_packages(
         db, 
         skip=offset, 
         limit=page_size,
-        name_filter=name_pattern,
-        use_regex=True if name_pattern else False
+        name_filter=validated_pattern,
+        use_regex=True if validated_pattern else False
     )
     
     # Get total count with same filter
-    if name_pattern:
+    if validated_pattern:
         from src.database.models import Package
         query = db.query(Package)
-        query = query.filter(Package.name.op('REGEXP')(name_pattern))
+        # Use safe pattern matching instead of raw REGEXP
+        query = query.filter(Package.name.op('~')(validated_pattern))
         total = query.count()
     else:
         from src.database.models import Package
@@ -532,10 +548,25 @@ def query_artifacts(
     Returns:
         List of matching artifact metadata
     """
+    from src.api.dependencies import sanitize_name_query, safe_regex_match, RegexTimeoutError
+    
     results = []
     
     for query in queries:
-        if query.name == "*":
+        # Validate and sanitize the name query to prevent ReDoS attacks
+        try:
+            sanitized_name = sanitize_name_query(query.name)
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
+        except Exception:
+            # Any other error means invalid pattern
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid name pattern"
+            )
+        
+        if sanitized_name == "*":
             # List all artifacts
             packages = crud.get_all_packages(db)
             for pkg in packages:
@@ -549,27 +580,54 @@ def query_artifacts(
                     )
                 )
         else:
-            # Search by name
-            packages = db.query(Package).filter(
-                Package.name.like(f"%{query.name}%")
-            ).all()
+            # Check if pattern contains regex metacharacters
+            regex_metacharacters = set('[](){}|^$.*+?\\')
+            is_regex = any(c in regex_metacharacters for c in sanitized_name)
             
-            for pkg in packages:
-                # Get actual artifact type from package (artifact_type field)
-                artifact_type = getattr(pkg, 'artifact_type', 'model')
+            if is_regex:
+                # Use safe regex matching with timeout protection
+                packages = crud.get_all_packages(db)
+                for pkg in packages:
+                    try:
+                        if safe_regex_match(sanitized_name, pkg.name):
+                            artifact_type = getattr(pkg, 'artifact_type', 'model')
+                            
+                            if query.types and len(query.types) > 0:
+                                if artifact_type not in query.types:
+                                    continue
+                            
+                            results.append(
+                                ArtifactMetadata(
+                                    name=pkg.name,
+                                    id=str(pkg.id),
+                                    type=artifact_type
+                                )
+                            )
+                    except RegexTimeoutError:
+                        # Regex took too long - pattern is likely malicious
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Regex pattern execution timed out"
+                        )
+            else:
+                # Simple text search using SQL LIKE
+                packages = db.query(Package).filter(
+                    Package.name.like(f"%{sanitized_name}%")
+                ).all()
                 
-                # Filter by types ONLY if types filter was explicitly provided
-                # Empty types list means "return all types"
-                if query.types and len(query.types) > 0:
-                    if artifact_type not in query.types:
-                        continue
+                for pkg in packages:
+                    artifact_type = getattr(pkg, 'artifact_type', 'model')
                     
-                results.append(
-                    ArtifactMetadata(
-                        name=pkg.name,
-                        id=str(pkg.id),
-                        type=artifact_type
+                    if query.types and len(query.types) > 0:
+                        if artifact_type not in query.types:
+                            continue
+                        
+                    results.append(
+                        ArtifactMetadata(
+                            name=pkg.name,
+                            id=str(pkg.id),
+                            type=artifact_type
+                        )
                     )
-                )
     
     return results

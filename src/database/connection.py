@@ -38,24 +38,52 @@ engine = create_engine(
 )
 
 
-# Register REGEXP function for SQLite
+# Register REGEXP function for SQLite with timeout protection
 @event.listens_for(engine, "connect")
 def enable_sqlite_regexp(dbapi_connection, connection_record):
     """
-    Enable REGEXP operator for SQLite.
+    Enable REGEXP operator for SQLite with timeout protection.
     
     SQLite doesn't have built-in regex support, so we need to provide
     a custom function using Python's re module.
+    
+    This implementation includes protection against ReDoS attacks by:
+    1. Catching regex errors
+    2. Using a timeout via threading (if pattern takes too long)
     """
     if DATABASE_URL.startswith("sqlite"):
+        import threading
+        
+        REGEX_TIMEOUT = 0.5  # Max 500ms for regex execution
+        
         def regexp(pattern, value):
-            """Regex matching function for SQLite."""
+            """Regex matching function for SQLite with timeout protection."""
             if value is None or pattern is None:
                 return False
-            try:
-                return re.search(pattern, value, re.IGNORECASE) is not None
-            except re.error:
+            
+            result = [False]
+            error = [None]
+            
+            def do_match():
+                try:
+                    result[0] = re.search(pattern, value, re.IGNORECASE) is not None
+                except re.error:
+                    result[0] = False
+                except Exception as e:
+                    error[0] = e
+                    result[0] = False
+            
+            # Run regex in a thread with timeout
+            thread = threading.Thread(target=do_match)
+            thread.daemon = True
+            thread.start()
+            thread.join(REGEX_TIMEOUT)
+            
+            if thread.is_alive():
+                # Regex took too long - likely ReDoS attack
                 return False
+            
+            return result[0]
         
         dbapi_connection.create_function("regexp", 2, regexp)
 

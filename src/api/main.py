@@ -690,7 +690,8 @@ def create_app() -> FastAPI:
         """
         Search for artifacts using regular expression (BASELINE).
         
-        Searches artifact names using the provided regex pattern.
+        Searches artifact names and READMEs using the provided regex pattern.
+        Protected against ReDoS attacks via pattern validation and timeout.
         
         Args:
             regex_query: Object containing regex pattern
@@ -703,35 +704,63 @@ def create_app() -> FastAPI:
             HTTPException 400: Invalid regex pattern
             HTTPException 404: No artifacts found
         """
+        from src.api.dependencies import (
+            validate_regex_pattern,
+            safe_regex_match,
+            RegexTimeoutError,
+        )
+        
         logger.info(f"🔍 POST /artifact/byRegEx: pattern='{regex_query.regex}'")
+        
+        # Validate regex pattern first to prevent ReDoS attacks
         try:
-            # Search packages using regex
-            packages = crud.get_packages(
-                db,
-                skip=0,
-                limit=1000,
-                name_filter=regex_query.regex,
-                use_regex=True
+            validated_pattern = validate_regex_pattern(regex_query.regex)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"❌ POST /artifact/byRegEx: Invalid pattern - {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
             )
+        
+        try:
+            # Get all packages and filter with safe regex matching
+            all_packages = crud.get_all_packages(db)
             
-            logger.info(f"   Found {len(packages)} package(s) matching regex")
+            logger.info(f"   Checking {len(all_packages)} package(s) against regex")
             
-            if not packages:
+            results = []
+            for pkg in all_packages:
+                try:
+                    # Check if regex matches name OR readme_content
+                    name_match = safe_regex_match(validated_pattern, pkg.name)
+                    readme_match = False
+                    if hasattr(pkg, 'readme_content') and pkg.readme_content:
+                        readme_match = safe_regex_match(validated_pattern, pkg.readme_content)
+                    
+                    if name_match or readme_match:
+                        artifact_type = getattr(pkg, 'artifact_type', 'model')
+                        results.append(
+                            ArtifactMetadata(
+                                name=pkg.name,
+                                id=str(pkg.id),
+                                type=artifact_type
+                            )
+                        )
+                except RegexTimeoutError:
+                    # Regex took too long - pattern might be malicious
+                    logger.error(f"❌ POST /artifact/byRegEx: Pattern timeout")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
+                    )
+            
+            if not results:
                 logger.warning("   ⚠ No artifacts found")
                 raise HTTPException(
                     status_code=404,
                     detail="No artifact found under this regex."
-                )
-            
-            results = []
-            for pkg in packages:
-                artifact_type = getattr(pkg, 'artifact_type', 'model')
-                results.append(
-                    ArtifactMetadata(
-                        name=pkg.name,
-                        id=str(pkg.id),  # Convert to string
-                        type=artifact_type
-                    )
                 )
             
             logger.info(f"✓ POST /artifact/byRegEx: Returning {len(results)}")
@@ -740,10 +769,10 @@ def create_app() -> FastAPI:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"❌ POST /artifact/byRegEx: Invalid pattern - {e}")
+            logger.error(f"❌ POST /artifact/byRegEx: Error - {e}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid regex pattern: {str(e)}"
+                detail=f"There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid"
             )
     
     # Ingest artifact endpoint (OpenAPI spec)
@@ -907,6 +936,29 @@ def create_app() -> FastAPI:
                 logger.warning(f"Could not get file size from HuggingFace: {e}")
             file_size_bytes = 0
         
+        # Fetch README content for searchability
+        readme_content = None
+        try:
+            from src.hf_api import HuggingFaceAPI
+            from src.models import ParsedURL, URLCategory
+            
+            if artifact_type == "model" and "huggingface" in url.lower():
+                hf_api = HuggingFaceAPI()
+                parsed_url = ParsedURL(
+                    url=url,
+                    category=URLCategory.MODEL,
+                    name=artifact_name,
+                    platform="huggingface",
+                    owner=url_parts[-2] if len(url_parts) >= 2 else None,
+                    repo=url_parts[-1] if url_parts else artifact_name
+                )
+                readme_content = hf_api.get_readme_content(parsed_url)
+                if readme_content:
+                    logger.info(f"📄 Fetched README: {len(readme_content)} chars")
+        except Exception as e:
+            logger.warning(f"Could not fetch README: {e}")
+            readme_content = None
+        
         from src.database import crud
         package = crud.create_package(
             db,
@@ -917,6 +969,7 @@ def create_app() -> FastAPI:
             s3_bucket="",
             file_size_bytes=file_size_bytes,
             source_url=url,
+            readme_content=readme_content,  # Store README for regex search
             uploaded_by=1,  # Default admin user
             ingest_status="pending"  # Mark as pending evaluation
         )
