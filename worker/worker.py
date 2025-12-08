@@ -356,11 +356,11 @@ def process_message(message: Dict[str, Any]) -> bool:
             s3_key = f"{artifact_type}s/{artifact_id}/{artifact_id}.tar.gz"
             
             metadata = {
-                "artifact-id": artifact_id,
-                "repo-id": repo_id,
-                "repo-type": repo_type,
-                "source-url": source_url,
-                "processed-at": datetime.utcnow().isoformat()
+                "artifact-id": str(artifact_id),
+                "repo-id": str(repo_id),
+                "repo-type": str(repo_type),
+                "source-url": str(source_url),
+                "processed-at": str(datetime.utcnow().isoformat())
             }
             
             s3_url = upload_to_s3(tarball_path, s3_key, S3_BUCKET_NAME, metadata)
