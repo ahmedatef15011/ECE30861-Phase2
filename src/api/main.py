@@ -1146,8 +1146,7 @@ def create_app() -> FastAPI:
                 f"📊 PACKAGE UPDATED: id={package.id}, status=approved (auto)"
             )
         
-        # S3 Upload (if enabled) - runs in background thread
-        # Returns immediately, upload continues asynchronously
+        # S3 Storage - Queue for async upload to S3
         enable_s3 = os.getenv(
             "ENABLE_S3_STORAGE",
             "false"
@@ -1155,137 +1154,96 @@ def create_app() -> FastAPI:
         
         s3_bucket = os.getenv("S3_BUCKET_NAME", "ml-registery-artifacts")
         s3_region = os.getenv("AWS_REGION", "us-east-1")
+        sqs_queue_url = os.getenv("SQS_QUEUE_URL")
         
-        # Generate predictable S3 key BEFORE upload starts
-        # This lets us return the URL immediately
-        s3_key = f"{artifact_type}s/{package.id}/{artifact_name}.tar.gz"
-        s3_download_url = f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+        # Generate predictable S3 download URL (before upload completes)
+        s3_key_prefix = f"{artifact_type}s/{package.id}"
+        s3_download_url = (
+            f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/"
+            f"{s3_key_prefix}/"
+        )
         
-        # Log S3 status for debugging
         logger.info(
             f"☁️  S3 Config: enable_s3={enable_s3}, "
-            f"S3_AVAILABLE={S3_AVAILABLE}, "
-            f"bucket={s3_bucket}"
+            f"S3_AVAILABLE={S3_AVAILABLE}, bucket={s3_bucket}"
         )
-        logger.info(f"☁️  S3 download URL will be: {s3_download_url}")
         
-        # Update package with S3 info immediately (before upload)
-        package.s3_key = s3_key
-        package.s3_bucket = s3_bucket
-        db.commit()
-        
-        if enable_s3 and S3_AVAILABLE:
-            # Schedule S3 upload in background thread (non-blocking)
-            import threading
-            
-            def background_s3_upload(
-                pkg_id: int,
-                artifact_type: str,
-                full_model_name: str,
-                artifact_name: str,
-                url: str,
-                s3_key: str
-            ):
-                """Upload artifact to S3 in background thread."""
-                from src.database.connection import SessionLocal
+        if enable_s3 and S3_AVAILABLE and sqs_queue_url:
+            try:
+                # Queue artifact for async upload to S3 via ECS worker
+                import json
+                import boto3
                 
-                try:
-                    logger.info(
-                        f"☁️  [ASYNC] Starting S3 upload for artifact {pkg_id}"
-                    )
-                    logger.info(f"☁️  [ASYNC] Target S3 key: {s3_key}")
-                    
-                    # Create new DB session for background thread
-                    bg_db = SessionLocal()
-                    
-                    try:
-                        # Get file URLs from HuggingFace
-                        from src.hf_api import HuggingFaceAPI
-                        hf_api = HuggingFaceAPI()
-                        s3_storage = get_s3_storage()
-                        
-                        if artifact_type == "model":
-                            file_urls = hf_api.get_model_file_urls(
-                                full_model_name, max_files=50
-                            )
-                        elif artifact_type == "dataset":
-                            file_urls = hf_api.get_dataset_file_urls(
-                                full_model_name, max_files=50
-                            )
-                        else:
-                            logger.warning(
-                                f"☁️  [ASYNC] S3 not supported for {artifact_type}"
-                            )
-                            return
-                        
-                        if not file_urls:
-                            logger.warning(
-                                f"☁️  [ASYNC] No files found for {full_model_name}"
-                            )
-                            return
-                        
-                        logger.info(
-                            f"☁️  [ASYNC] Found {len(file_urls)} files to upload"
-                        )
-                        
-                        # Stream to S3 using the pre-determined key
-                        final_key, file_size = s3_storage.stream_files_to_s3_compressed(
-                            file_urls, s3_key, artifact_name
-                        )
-                        
-                        # Update database with final file size
-                        pkg = bg_db.query(Package).filter(Package.id == pkg_id).first()
-                        if pkg:
-                            pkg.file_size_bytes = file_size
-                            bg_db.commit()
-                            logger.info(
-                                f"✅ [ASYNC] S3 upload complete: {final_key} "
-                                f"({file_size} bytes)"
-                            )
-                        else:
-                            logger.error(
-                                f"☁️  [ASYNC] Package {pkg_id} not found in DB"
-                            )
-                    finally:
-                        bg_db.close()
-                        
-                except Exception as e:
-                    logger.error(
-                        f"❌ [ASYNC] S3 upload failed for artifact {pkg_id}: {e}",
-                        exc_info=True
-                    )
-            
-            # Start background thread for S3 upload
-            if artifact_type in ["model", "dataset"] and "huggingface" in url.lower():
-                upload_thread = threading.Thread(
-                    target=background_s3_upload,
-                    args=(package.id, artifact_type, full_model_name, artifact_name, url, s3_key),
-                    daemon=False  # Keep thread alive even after request completes
+                # Parse repo_id from URL
+                url_parts = url.strip("/").split("/")
+                if len(url_parts) >= 2:
+                    repo_id = "/".join(url_parts[-2:])
+                else:
+                    repo_id = url_parts[-1]
+                
+                # Remove .git suffix if present
+                if repo_id.endswith('.git'):
+                    repo_id = repo_id[:-4]
+                
+                # Determine repo_type for HuggingFace
+                repo_type = "model" if artifact_type == "model" else "dataset"
+                
+                # Create SQS message for worker
+                message_body = {
+                    "artifact_id": package.id,
+                    "repo_id": repo_id,
+                    "repo_type": repo_type,
+                    "revision": "main",
+                    "source_url": url,
+                    "artifact_type": artifact_type,
+                    "requested_at": datetime.utcnow().isoformat() + "Z"
+                }
+                
+                sqs_client = boto3.client('sqs', region_name=s3_region)
+                
+                # Send message to SQS (non-blocking, <100ms)
+                response = sqs_client.send_message(
+                    QueueUrl=sqs_queue_url,
+                    MessageBody=json.dumps(message_body),
+                    MessageAttributes={
+                        'ArtifactType': {
+                            'DataType': 'String',
+                            'StringValue': artifact_type
+                        },
+                        'ArtifactId': {
+                            'DataType': 'String',
+                            'StringValue': package.id
+                        }
+                    }
                 )
-                upload_thread.start()
+                
+                message_id = response.get('MessageId')
+                
+                # Update package with queue status
+                package.s3_key = s3_key_prefix
+                package.s3_bucket = s3_bucket
+                package.ingest_status = "processing"
+                package.quality_gate_result["sqs_message_id"] = message_id
+                package.quality_gate_result["queued_at"] = (
+                    datetime.utcnow().isoformat()
+                )
+                db.commit()
+                
                 logger.info(
-                    f"☁️  S3 upload started in background for artifact {package.id}"
+                    f"✅ Queued for S3 upload: artifact_id={package.id}, "
+                    f"message_id={message_id}"
                 )
                 logger.info(
-                    f"☁️  Returning immediately with S3 URL: {s3_download_url}"
+                    f"☁️  S3 download URL (pending): {s3_download_url}"
                 )
-            elif artifact_type == "code" and "github.com" in url.lower():
-                logger.info("GitHub code artifact - S3 upload skipped")
-                # For code, fall back to source URL
-                s3_download_url = url
-            else:
-                logger.warning(
-                    f"S3 streaming not implemented for {artifact_type} from {url}"
-                )
-                # Fall back to source URL
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to queue S3 upload: {e}")
+                # Fall back to source URL on queue error
                 s3_download_url = url
         else:
-            if not enable_s3:
-                logger.info("☁️  S3 storage disabled via ENABLE_S3_STORAGE env var")
-                s3_download_url = url  # Fall back to source URL
-            elif not S3_AVAILABLE:
-                logger.warning("☁️  S3 storage not available - boto3 not installed")
-                s3_download_url = url  # Fall back to source URL
+            logger.info("☁️  S3/SQS disabled, using source URL")
+            s3_download_url = url
         
         # Store the quality gate scores in database (only for models)
         if (artifact_type == "model" and validation_result and
