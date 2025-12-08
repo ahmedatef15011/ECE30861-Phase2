@@ -100,13 +100,37 @@ class ReviewednessMetric(BaseMetric):
                 
                 if total_lines == 0:
                     logger.warning("No code lines found in repository")
-                    return 0.0
+                    # Use fallback instead of returning 0
+                    fallback = FallbackScorer(context.readme_content)
+                    score, details = fallback.get_reviewedness_fallback_score()
+                    return max(0.1, score)  # Minimum floor
 
-                score = reviewed_lines / total_lines
+                git_score = reviewed_lines / total_lines
                 logger.info(
-                    f"Reviewedness: {reviewed_lines}/{total_lines} = {score:.3f}"
+                    f"Reviewedness git: {reviewed_lines}/{total_lines} "
+                    f"= {git_score:.3f}"
                 )
-                return score
+                
+                # Get fallback score from README indicators
+                fallback = FallbackScorer(context.readme_content)
+                fallback_score, details = (
+                    fallback.get_reviewedness_fallback_score()
+                )
+                
+                # Only blend if fallback found meaningful indicators
+                # (score > 0.15 baseline means actual indicators were found)
+                if fallback_score > 0.15:
+                    # Blend git score (70%) with fallback score (30%)
+                    # This ensures models with good README indicators
+                    # aren't penalized too harshly for missing PR patterns
+                    blended = 0.7 * git_score + 0.3 * fallback_score
+                    logger.info(
+                        f"Reviewedness blended: git={git_score:.3f}, "
+                        f"fallback={fallback_score:.3f}, final={blended:.3f}"
+                    )
+                    return blended
+                
+                return git_score
 
             # If we couldn't clone any repo, try fallback
             logger.warning(

@@ -383,8 +383,8 @@ mno345|Direct commit no PR
             model_context_with_github, {}
         )
 
-        # Empty repo should return 0.0
-        assert result.score == 0.0
+        # Empty repo returns baseline fallback score
+        assert result.score >= 0.1
 
     @patch('src.metrics.reviewedness.GitInspector')
     @patch('src.metrics.reviewedness.subprocess.run')
@@ -413,8 +413,8 @@ mno345|Direct commit no PR
             model_context_with_github, {}
         )
 
-        # No code files, should return 0.0
-        assert result.score == 0.0
+        # No code files, returns baseline fallback score
+        assert result.score >= 0.1
 
     def test_is_code_file_python(self, reviewedness_metric):
         """Test Python files are recognized as code."""
