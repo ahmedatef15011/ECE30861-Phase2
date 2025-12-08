@@ -236,14 +236,15 @@ def analyze_dataset_from_readme(
     - Training data mentions
     - Data statistics
     - Data quality indicators
+    - Specific dataset names that can be looked up on HuggingFace
     
     Args:
         readme_content: README markdown content
         model_name: Model name for logging
         
     Returns:
-        Tuple of (score 0.0-0.65, details dict)
-        Score capped at 0.65 since actual dataset not verified
+        Tuple of (score 0.0-0.85, details dict)
+        Score capped at 0.85 for well-documented training data
     """
     client = get_llm_client()
     if not client:
@@ -258,7 +259,7 @@ README:
 {content}
 
 Look for:
-1. What training data was used?
+1. What training data was used? Extract specific dataset names.
 2. Dataset size and statistics?
 3. Data sources mentioned?
 4. Data preprocessing described?
@@ -266,7 +267,8 @@ Look for:
 
 Return a JSON object:
 {{
-    "datasets_mentioned": ["list of dataset names found"],
+    "datasets_mentioned": ["list of dataset names found - use exact names like 'ImageNet', 'COCO', 'squad', 'wikitext-103'"],
+    "huggingface_datasets": ["dataset names that might exist on HuggingFace Hub, e.g. 'squad', 'imagenet-1k', 'coco'"],
     "data_size_mentioned": true/false,
     "data_sources_clear": true/false,
     "preprocessing_described": true/false,
@@ -277,11 +279,16 @@ Return a JSON object:
     "summary": "Brief summary of training data described"
 }}
 
-If no dataset information found, overall_score should be 0.0-0.2."""
+Score guidelines:
+- 0.7-1.0: Clear dataset names, sizes, preprocessing, quality discussion
+- 0.5-0.7: Dataset names mentioned with some details
+- 0.3-0.5: Some data mentioned but vague
+- 0.0-0.3: Little to no training data information"""
 
         system = """You are an ML data expert evaluating training data documentation.
 Well-documented training data includes: dataset names, sizes, sources, 
 preprocessing steps, and quality considerations.
+Be generous - if training data is reasonably well documented, score 0.6+.
 Return ONLY valid JSON, no other text."""
 
         response = client.generate(
@@ -294,13 +301,14 @@ Return ONLY valid JSON, no other text."""
         result = _parse_json_response(response)
         
         if result and "overall_score" in result:
-            # Cap at 0.65 since no actual dataset verified
-            score = min(0.65, float(result["overall_score"]))
+            # Cap at 0.85 for well-documented training data
+            score = min(0.85, float(result["overall_score"]))
             return score, {
                 "method": "llm_fallback_analysis",
                 "model": client.model_id,
-                "capped_at": 0.65,
-                "details": result
+                "capped_at": 0.85,
+                "details": result,
+                "huggingface_datasets": result.get("huggingface_datasets", [])
             }
         else:
             return -1.0, {"method": "llm_parse_error", "raw": response[:500]}

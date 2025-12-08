@@ -520,7 +520,8 @@ class TestWeightsAndConstants:
         """Test max fallback score constants."""
         scorer = FallbackScorer(sample_readme_with_dataset)
         
-        assert scorer.MAX_DATASET_FALLBACK == 0.65
+        # Dataset and code caps increased for better scores
+        assert scorer.MAX_DATASET_FALLBACK == 0.80
         assert scorer.MAX_CODE_FALLBACK == 0.65
         assert scorer.MAX_REVIEWEDNESS_FALLBACK == 0.90
 

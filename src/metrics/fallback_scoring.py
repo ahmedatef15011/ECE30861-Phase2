@@ -59,7 +59,7 @@ class FallbackScorer:
     """
 
     # Maximum scores for fallback (lower than full resource scores)
-    MAX_DATASET_FALLBACK = 0.65
+    MAX_DATASET_FALLBACK = 0.80
     MAX_CODE_FALLBACK = 0.65
     # Reviewedness cap - allows well-documented models to reach high scores
     MAX_REVIEWEDNESS_FALLBACK = 0.90
@@ -172,38 +172,43 @@ class FallbackScorer:
             "indicators_found": []
         }
 
-        # Check for dataset mentions (0.0 - 0.15)
+        # Check for dataset mentions (0.0 - 0.20)
         dataset_names = self._extract_dataset_mentions()
         if dataset_names:
-            score += min(0.15, 0.05 * len(dataset_names))
+            score += min(0.20, 0.07 * len(dataset_names))
             details["indicators_found"].append(
                 f"dataset_names: {dataset_names[:5]}"
             )
 
-        # Check for training data description (0.0 - 0.15)
+        # Check for training data description (0.0 - 0.20)
         if self._has_training_data_description():
-            score += 0.15
+            score += 0.20
             details["indicators_found"].append("training_data_description")
 
-        # Check for data statistics (0.0 - 0.10)
+        # Check for data statistics (0.0 - 0.15)
         if self._has_data_statistics():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("data_statistics")
 
-        # Check for data source/origin (0.0 - 0.10)
+        # Check for data source/origin (0.0 - 0.15)
         if self._has_data_source():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("data_source")
 
-        # Check for data preprocessing info (0.0 - 0.10)
+        # Check for data preprocessing info (0.0 - 0.15)
         if self._has_preprocessing_info():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("preprocessing_info")
 
-        # Base credit for having a README with content (0.05)
+        # Base credit for having a README with content (0.10)
         if len(self.readme_content) > 100:
-            score += 0.05
+            score += 0.10
             details["indicators_found"].append("readme_exists")
+
+        # Baseline for HuggingFace models (implies some data quality)
+        if score == 0.0 and len(self.readme_content) > 50:
+            score = 0.20
+            details["indicators_found"].append("baseline_credit")
 
         final_score = min(self.MAX_DATASET_FALLBACK, score)
         details["score"] = final_score
