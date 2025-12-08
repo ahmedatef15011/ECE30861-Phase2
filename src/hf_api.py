@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Tuple
 
 from huggingface_hub import HfApi, hf_hub_download, list_repo_files
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
@@ -18,6 +18,89 @@ class HuggingFaceAPI:
         self.api = HfApi()
         self.token = os.getenv("HF_TOKEN")
         self.timeout = 30.0
+
+    def get_model_file_urls(
+        self,
+        model_id: str,
+        max_files: int = 50
+    ) -> List[Tuple[str, str]]:
+        """
+        Get direct download URLs for all files in a HuggingFace model.
+        
+        Args:
+            model_id: HuggingFace model ID (e.g., "google-bert/bert-base-uncased")
+            max_files: Maximum number of files to return
+            
+        Returns:
+            List of (filename, download_url) tuples
+        """
+        try:
+            # List all files in the repository
+            files = list_repo_files(model_id, token=self.token)
+            
+            # Build download URLs
+            file_urls = []
+            for filename in files[:max_files]:
+                # HuggingFace CDN URL pattern
+                url = (
+                    f"https://huggingface.co/{model_id}"
+                    f"/resolve/main/{filename}"
+                )
+                file_urls.append((filename, url))
+            
+            logger.info(
+                f"Found {len(file_urls)} files for {model_id}"
+            )
+            return file_urls
+            
+        except RepositoryNotFoundError:
+            logger.warning(f"Repository not found: {model_id}")
+            return []
+        except Exception as e:
+            logger.error(f"Error listing files for {model_id}: {e}")
+            return []
+
+    def get_dataset_file_urls(
+        self,
+        dataset_id: str,
+        max_files: int = 50
+    ) -> List[Tuple[str, str]]:
+        """
+        Get direct download URLs for files in a HuggingFace dataset.
+        
+        Args:
+            dataset_id: HuggingFace dataset ID
+            max_files: Maximum number of files to return
+            
+        Returns:
+            List of (filename, download_url) tuples
+        """
+        try:
+            files = list_repo_files(
+                dataset_id,
+                repo_type="dataset",
+                token=self.token
+            )
+            
+            file_urls = []
+            for filename in files[:max_files]:
+                url = (
+                    f"https://huggingface.co/datasets/{dataset_id}"
+                    f"/resolve/main/{filename}"
+                )
+                file_urls.append((filename, url))
+            
+            logger.info(
+                f"Found {len(file_urls)} files for dataset {dataset_id}"
+            )
+            return file_urls
+            
+        except RepositoryNotFoundError:
+            logger.warning(f"Dataset not found: {dataset_id}")
+            return []
+        except Exception as e:
+            logger.error(f"Error listing dataset files for {dataset_id}: {e}")
+            return []
 
     def get_model_info(self, model_url: ParsedURL) -> Optional[Dict[str, Any]]:
         # get comprehensive model information from HF Hub API

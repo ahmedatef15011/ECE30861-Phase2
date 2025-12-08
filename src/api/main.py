@@ -823,6 +823,51 @@ def create_app() -> FastAPI:
         # Use provided name if available, otherwise parse from URL
         url = artifact_data.url
         
+        # Check if artifact already exists by source_url
+        # This prevents re-streaming from HF to S3 for duplicates
+        existing = db.query(Package).filter(
+            Package.source_url == url
+        ).first()
+        
+        if existing:
+            logger.info(
+                f"🔄 Artifact already exists: id={existing.id}, "
+                f"name={existing.name}"
+            )
+            
+            # Generate download URL based on storage
+            enable_s3 = os.getenv(
+                "ENABLE_S3_STORAGE", "false"
+            ).lower() == "true"
+            
+            download_url = None
+            if (enable_s3 and S3_AVAILABLE and 
+                    existing.s3_key and existing.s3_bucket):
+                try:
+                    s3_storage = get_s3_storage()
+                    download_url = s3_storage.generate_download_url(
+                        existing.s3_key,
+                        expiration=3600
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to generate S3 URL: {e}")
+            
+            if not download_url:
+                download_url = f"/download/{artifact_type}/{existing.id}"
+            
+            # Return existing artifact info
+            return ArtifactIngestResponse(
+                metadata=ArtifactMetadata(
+                    name=existing.name,
+                    id=str(existing.id),
+                    type=getattr(existing, 'artifact_type', artifact_type)
+                ),
+                data=ArtifactData(
+                    url=url,
+                    download_url=download_url
+                )
+            )
+        
         # Extract full model identifier for validation (e.g., "owner/repo")
         url_parts = url.strip("/").split("/")
         
@@ -1102,46 +1147,84 @@ def create_app() -> FastAPI:
             )
         
         # S3 Upload (if enabled) - only for approved artifacts
+        # Uses direct HF->S3 streaming without local storage
         enable_s3 = os.getenv(
             "ENABLE_S3_STORAGE",
             "false"
         ).lower() == "true"
         
+        s3_download_url = None  # Will be set if S3 upload succeeds
+        
         if enable_s3 and S3_AVAILABLE:
             try:
                 logger.info(
-                    f"S3 enabled - downloading artifact {package.id}"
+                    f"☁️  S3 enabled - streaming artifact {package.id} "
+                    f"directly from source to S3"
                 )
                 
-                # Download from HuggingFace
-                if artifact_type == "model" and "huggingface.co" in url:
-                    downloader = ModelDownloader()
-                    local_path = downloader.download_huggingface_model(
-                        full_model_name
-                    )
+                # Stream directly from HuggingFace to S3 (no local download)
+                if artifact_type in ["model", "dataset"] and "huggingface" in url.lower():
+                    from src.hf_api import HuggingFaceAPI
                     
-                    # Upload to S3
+                    hf_api = HuggingFaceAPI()
                     s3_storage = get_s3_storage()
-                    s3_prefix = f"{artifact_type}s/{package.id}"
-                    s3_key, file_size = s3_storage.upload_directory(
-                        local_path,
-                        s3_prefix,
-                        artifact_name
-                    )
                     
-                    # Update database with S3 info
-                    package.s3_key = s3_key
-                    package.s3_bucket = s3_storage.bucket_name
-                    package.file_size_bytes = file_size
-                    db.commit()
-                    db.refresh(package)
+                    # Get file URLs from HuggingFace
+                    if artifact_type == "model":
+                        file_urls = hf_api.get_model_file_urls(
+                            full_model_name,
+                            max_files=50
+                        )
+                    else:
+                        file_urls = hf_api.get_dataset_file_urls(
+                            full_model_name,
+                            max_files=50
+                        )
                     
+                    if file_urls:
+                        # Stream files directly to S3 as compressed archive
+                        s3_key = (
+                            f"{artifact_type}s/{package.id}/"
+                            f"{artifact_name}.tar.gz"
+                        )
+                        
+                        s3_key, file_size = s3_storage.stream_files_to_s3_compressed(
+                            file_urls,
+                            s3_key,
+                            artifact_name
+                        )
+                        
+                        # Update database with S3 info
+                        package.s3_key = s3_key
+                        package.s3_bucket = s3_storage.bucket_name
+                        package.file_size_bytes = file_size
+                        db.commit()
+                        db.refresh(package)
+                        
+                        # Generate presigned download URL
+                        s3_download_url = s3_storage.generate_download_url(
+                            s3_key,
+                            expiration=3600
+                        )
+                        
+                        logger.info(
+                            f"✅ Streamed to S3: {s3_key} ({file_size} bytes)"
+                        )
+                    else:
+                        logger.warning(
+                            f"No files found for {full_model_name}"
+                        )
+                        
+                elif artifact_type == "code" and "github.com" in url.lower():
+                    # GitHub code repositories - download as zip
                     logger.info(
-                        f"Uploaded to S3: {s3_key} ({file_size} bytes)"
+                        f"GitHub code artifact - using redirect to source"
                     )
+                    # For now, just redirect to GitHub's zip download
+                    # Could implement direct streaming in future
                 else:
                     logger.warning(
-                        f"S3 upload not implemented for "
+                        f"S3 streaming not implemented for "
                         f"{artifact_type} from {url}"
                     )
             except Exception as e:
@@ -1189,14 +1272,23 @@ def create_app() -> FastAPI:
                 net_score=scores.get("net_score", 0.0)
             )
         
-        # Return response (per OpenAPI spec - no scores in ingest response)
+        # Build download URL for response
+        # If S3 upload succeeded, use the presigned URL
+        # Otherwise, use internal proxy endpoint
+        if not s3_download_url:
+            s3_download_url = f"/download/{artifact_type}/{package.id}"
+        
+        # Return response with download_url (per OpenAPI spec)
         return ArtifactIngestResponse(
             metadata=ArtifactMetadata(
                 name=artifact_name,
                 id=str(package.id),
                 type=artifact_type
             ),
-            data=ArtifactData(url=url)
+            data=ArtifactData(
+                url=url,
+                download_url=s3_download_url
+            )
         )
     
     # GET endpoints for listing artifacts by type

@@ -1,13 +1,22 @@
 """S3 storage implementation for model artifacts."""
 import os
+import io
 import tempfile
 import tarfile
 import boto3
 from botocore.exceptions import ClientError
-from typing import Optional, Tuple
+from botocore.config import Config
+from typing import Optional, Tuple, List, Generator
 import logging
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
+
+# Configure boto3 for large file uploads
+MULTIPART_THRESHOLD = 8 * 1024 * 1024  # 8MB
+MULTIPART_CHUNKSIZE = 8 * 1024 * 1024  # 8MB
+MAX_CONCURRENCY = 10
 
 
 class S3Storage:
@@ -24,7 +33,17 @@ class S3Storage:
             "mlregistry-artifacts"
         )
         self.region = region
-        self.s3_client = boto3.client('s3', region_name=region)
+        
+        # Configure for large file transfers
+        config = Config(
+            max_pool_connections=MAX_CONCURRENCY,
+            retries={'max_attempts': 3}
+        )
+        self.s3_client = boto3.client(
+            's3',
+            region_name=region,
+            config=config
+        )
 
         # Verify bucket exists
         try:
@@ -35,6 +54,126 @@ class S3Storage:
                 f"S3 bucket {self.bucket_name} not accessible: {e}"
             )
             raise
+
+    def stream_files_to_s3_compressed(
+        self,
+        file_urls: List[Tuple[str, str]],
+        s3_key: str,
+        artifact_name: str
+    ) -> Tuple[str, int]:
+        """
+        Stream files directly from URLs to S3 as compressed tar.gz.
+        
+        Downloads files in parallel and creates a compressed archive
+        that is streamed directly to S3 without storing locally.
+        
+        Args:
+            file_urls: List of (filename, download_url) tuples
+            s3_key: S3 key for the compressed archive
+            artifact_name: Name for the artifact directory in archive
+            
+        Returns:
+            Tuple of (s3_key, file_size_bytes)
+        """
+        try:
+            # Create a temporary file for the tar.gz (streaming to S3
+            # requires knowing content length for standard upload)
+            with tempfile.NamedTemporaryFile(
+                suffix='.tar.gz',
+                delete=False
+            ) as tmp_file:
+                tmp_path = tmp_file.name
+                
+                logger.info(
+                    f"Creating compressed archive for {len(file_urls)} files"
+                )
+                
+                # Create tar.gz archive
+                with tarfile.open(tmp_path, 'w:gz') as tar:
+                    # Download and add files in parallel batches
+                    with ThreadPoolExecutor(max_workers=5) as executor:
+                        futures = {}
+                        for filename, url in file_urls:
+                            future = executor.submit(
+                                self._download_file_content,
+                                url,
+                                filename
+                            )
+                            futures[future] = filename
+                        
+                        for future in as_completed(futures):
+                            filename = futures[future]
+                            try:
+                                content = future.result()
+                                if content:
+                                    # Add to tar
+                                    info = tarfile.TarInfo(
+                                        name=f"{artifact_name}/{filename}"
+                                    )
+                                    info.size = len(content)
+                                    tar.addfile(
+                                        info,
+                                        io.BytesIO(content)
+                                    )
+                                    logger.debug(
+                                        f"Added {filename} ({len(content)} bytes)"
+                                    )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to download {filename}: {e}"
+                                )
+                
+                # Get final file size
+                file_size = os.path.getsize(tmp_path)
+                
+                # Upload to S3
+                logger.info(
+                    f"Uploading {file_size} bytes to s3://{self.bucket_name}/{s3_key}"
+                )
+                
+                self.s3_client.upload_file(
+                    tmp_path,
+                    self.bucket_name,
+                    s3_key,
+                    ExtraArgs={
+                        'ContentType': 'application/gzip',
+                        'Metadata': {
+                            'artifact-name': artifact_name,
+                            'compressed-size': str(file_size),
+                            'file-count': str(len(file_urls))
+                        }
+                    }
+                )
+                
+                logger.info(f"Upload complete: {s3_key}")
+                
+                # Clean up temp file
+                os.unlink(tmp_path)
+                
+                return s3_key, file_size
+                
+        except Exception as e:
+            logger.error(f"Failed to stream files to S3: {e}")
+            raise
+
+    def _download_file_content(
+        self,
+        url: str,
+        filename: str
+    ) -> Optional[bytes]:
+        """Download file content from URL."""
+        try:
+            response = requests.get(
+                url,
+                timeout=60,
+                stream=True,
+                headers={'User-Agent': 'MLRegistry/1.0'}
+            )
+            response.raise_for_status()
+            return response.content
+        except Exception as e:
+            logger.warning(f"Failed to download {filename} from {url}: {e}")
+            return None
 
     def upload_directory(
         self,
