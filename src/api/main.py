@@ -835,25 +835,25 @@ def create_app() -> FastAPI:
                 f"name={existing.name}"
             )
             
-            # Generate download URL based on storage
-            enable_s3 = os.getenv(
-                "ENABLE_S3_STORAGE", "false"
-            ).lower() == "true"
+            # Generate download URL - use direct S3 URL pattern
+            s3_bucket = os.getenv("S3_BUCKET_NAME", "ml-registery-artifacts")
+            s3_region = os.getenv("AWS_REGION", "us-east-1")
             
-            download_url = None
-            if (enable_s3 and S3_AVAILABLE and 
-                    existing.s3_key and existing.s3_bucket):
-                try:
-                    s3_storage = get_s3_storage()
-                    download_url = s3_storage.generate_download_url(
-                        existing.s3_key,
-                        expiration=3600
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to generate S3 URL: {e}")
+            # If S3 key exists, generate S3 URL
+            if existing.s3_key:
+                download_url = (
+                    f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/"
+                    f"{existing.s3_key}"
+                )
+            else:
+                # Generate predictable S3 key for existing artifact
+                artifact_name = existing.name
+                s3_key = f"{artifact_type}s/{existing.id}/{artifact_name}.tar.gz"
+                download_url = (
+                    f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+                )
             
-            if not download_url:
-                download_url = f"/download/{artifact_type}/{existing.id}"
+            logger.info(f"🔄 Returning existing artifact download_url: {download_url}")
             
             # Return existing artifact info
             return ArtifactIngestResponse(
@@ -1763,8 +1763,21 @@ def create_app() -> FastAPI:
             # Fallback to constructed URL if no source_url
             url = f"https://huggingface.co/{package.name}"
         
-        # Build download URL (proxy to original source)
-        download_url = f"/download/{artifact_type}/{id}"
+        # Build download URL - use S3 URL
+        s3_bucket = os.getenv("S3_BUCKET_NAME", "ml-registery-artifacts")
+        s3_region = os.getenv("AWS_REGION", "us-east-1")
+        
+        if package.s3_key:
+            download_url = (
+                f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/"
+                f"{package.s3_key}"
+            )
+        else:
+            # Generate predictable S3 key
+            s3_key = f"{artifact_type}s/{id}/{package.name}.tar.gz"
+            download_url = (
+                f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
+            )
         
         return Artifact(
             metadata=ArtifactMetadata(
