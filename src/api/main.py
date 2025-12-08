@@ -1212,7 +1212,7 @@ def create_app() -> FastAPI:
                         },
                         'ArtifactId': {
                             'DataType': 'String',
-                            'StringValue': package.id
+                            'StringValue': str(package.id)
                         }
                     }
                 )
