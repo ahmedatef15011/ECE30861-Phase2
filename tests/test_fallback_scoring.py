@@ -352,7 +352,7 @@ class TestReviewednessFallbackScoring:
         score, details = scorer.get_reviewedness_fallback_score()
         
         # Should return baseline credit for HuggingFace-hosted models
-        assert score == 0.10
+        assert score == 0.25
         assert "reason" in details or "method" in details
     
     def test_reviewedness_score_with_minimal_readme(self, minimal_readme):
@@ -361,7 +361,7 @@ class TestReviewednessFallbackScoring:
         score, details = scorer.get_reviewedness_fallback_score()
         
         # Should return baseline credit when no indicators found
-        assert score == 0.15
+        assert score == 0.20
     
     def test_has_multiple_contributors(
         self, sample_readme_with_review_indicators
@@ -522,7 +522,7 @@ class TestWeightsAndConstants:
         
         assert scorer.MAX_DATASET_FALLBACK == 0.65
         assert scorer.MAX_CODE_FALLBACK == 0.65
-        assert scorer.MAX_REVIEWEDNESS_FALLBACK == 0.80
+        assert scorer.MAX_REVIEWEDNESS_FALLBACK == 0.90
 
 
 # =============================================================================

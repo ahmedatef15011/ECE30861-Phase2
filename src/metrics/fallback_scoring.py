@@ -61,8 +61,8 @@ class FallbackScorer:
     # Maximum scores for fallback (lower than full resource scores)
     MAX_DATASET_FALLBACK = 0.65
     MAX_CODE_FALLBACK = 0.65
-    # Reviewedness cap increased from 0.60 for more realistic scores
-    MAX_REVIEWEDNESS_FALLBACK = 0.80
+    # Reviewedness cap - allows well-documented models to reach high scores
+    MAX_REVIEWEDNESS_FALLBACK = 0.90
     
     # LLM weight in blended scoring (40% LLM, 60% deterministic)
     LLM_WEIGHT = 0.4
@@ -501,7 +501,7 @@ class FallbackScorer:
         # Give baseline credit for HuggingFace-hosted models without README
         # HuggingFace has some level of content moderation
         if not self.readme_content:
-            baseline = 0.10
+            baseline = 0.25
             return baseline, {
                 "method": "huggingface_baseline",
                 "reason": "No README available",
@@ -588,50 +588,60 @@ class FallbackScorer:
             "indicators_found": []
         }
 
-        # Check for multiple authors/contributors (0.0 - 0.20)
+        # Check for multiple authors/contributors (0.0 - 0.25)
         if self._has_multiple_contributors():
-            score += 0.20
+            score += 0.25
             details["indicators_found"].append("multiple_contributors")
 
-        # Check for institutional backing (0.0 - 0.15)
+        # Check for institutional backing (0.0 - 0.25) - strong indicator
         if self._has_institutional_backing():
-            score += 0.15
+            score += 0.25
             details["indicators_found"].append("institutional_backing")
 
-        # Check for acknowledgments (0.0 - 0.10)
+        # Check for acknowledgments (0.0 - 0.15)
         if self._has_acknowledgments():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("acknowledgments")
 
-        # Check for version history (0.0 - 0.10)
+        # Check for version history (0.0 - 0.15)
         if self._has_version_history():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("version_history")
 
-        # Check for citation/paper (0.0 - 0.15) - implies peer review
+        # Check for citation/paper (0.0 - 0.20) - implies peer review
         if self._has_paper_citation():
-            score += 0.15
+            score += 0.20
             details["indicators_found"].append("paper_citation")
 
-        # Check for contribution guidelines (0.0 - 0.10)
+        # Check for contribution guidelines (0.0 - 0.15)
         if self._has_contribution_guidelines():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("contribution_guidelines")
 
-        # Check for CI/CD badges (0.0 - 0.10)
+        # Check for CI/CD badges (0.0 - 0.15)
         if self._has_ci_cd_badges():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("ci_cd_badges")
 
-        # Check for code review references (0.0 - 0.10)
+        # Check for code review references (0.0 - 0.15)
         if self._has_code_review_references():
-            score += 0.10
+            score += 0.15
             details["indicators_found"].append("code_review_references")
+
+        # Check for model card completeness (0.0 - 0.20)
+        if self._has_complete_model_card():
+            score += 0.20
+            details["indicators_found"].append("complete_model_card")
+
+        # Check for usage examples (0.0 - 0.15)
+        if self._has_usage_examples():
+            score += 0.15
+            details["indicators_found"].append("usage_examples")
 
         # If no indicators found, give small baseline instead of -1.0
         # Models shouldn't be completely penalized for missing metadata
         if score == 0.0:
-            baseline = 0.15
+            baseline = 0.20
             return baseline, {
                 "method": "baseline_fallback",
                 "reason": "No review indicators found in README",
@@ -770,6 +780,23 @@ class FallbackScorer:
             'core team',
         ]
         return any(ind in self.readme_lower for ind in indicators)
+
+    def _has_complete_model_card(self) -> bool:
+        """Check for complete model card (implies professional process)."""
+        # Count key sections that indicate a complete model card
+        sections = [
+            'model description',
+            'intended use',
+            'limitations',
+            'training data',
+            'evaluation',
+            'how to use',
+            'license',
+            '## ',  # Markdown headers indicate structure
+        ]
+        found = sum(1 for s in sections if s in self.readme_lower)
+        # Consider complete if 3+ sections found
+        return found >= 3
 
     # =========================================================================
     # LLM RESULTS ACCESS

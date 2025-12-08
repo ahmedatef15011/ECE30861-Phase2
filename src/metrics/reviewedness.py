@@ -120,13 +120,39 @@ class ReviewednessMetric(BaseMetric):
                 # Only blend if fallback found meaningful indicators
                 # (score > 0.15 baseline means actual indicators were found)
                 if fallback_score > 0.15:
-                    # Blend git score (70%) with fallback score (30%)
-                    # This ensures models with good README indicators
-                    # aren't penalized too harshly for missing PR patterns
-                    blended = 0.7 * git_score + 0.3 * fallback_score
+                    # Dynamic blending: when git score is very low,
+                    # trust the fallback much more
+                    if git_score < 0.1:
+                        # Very low git: 20% git, 80% fallback
+                        # This ensures well-documented models aren't
+                        # penalized for not having PR patterns
+                        git_weight = 0.2
+                    elif git_score < 0.3:
+                        # Low git score: 35% git, 65% fallback
+                        git_weight = 0.35
+                    elif git_score < 0.5:
+                        # Medium git score: 50% git, 50% fallback
+                        git_weight = 0.5
+                    else:
+                        # High git score: 70% git, 30% fallback
+                        git_weight = 0.7
+                    
+                    fallback_weight = 1.0 - git_weight
+                    blended = (
+                        git_weight * git_score + fallback_weight * fallback_score
+                    )
+                    
+                    # Minimum floor: well-documented models (fallback >= 0.6)
+                    # should get at least 0.5 score
+                    if fallback_score >= 0.6:
+                        blended = max(blended, 0.5)
+                    elif fallback_score >= 0.5:
+                        blended = max(blended, 0.4)
+                    
                     logger.info(
-                        f"Reviewedness blended: git={git_score:.3f}, "
-                        f"fallback={fallback_score:.3f}, final={blended:.3f}"
+                        f"Reviewedness blended: git={git_score:.3f} "
+                        f"(w={git_weight}), fallback={fallback_score:.3f} "
+                        f"(w={fallback_weight}), final={blended:.3f}"
                     )
                     return blended
                 
