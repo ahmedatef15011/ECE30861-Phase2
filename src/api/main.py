@@ -1155,6 +1155,13 @@ def create_app() -> FastAPI:
         
         s3_download_url = None  # Will be set if S3 upload succeeds
         
+        # Log S3 status for debugging
+        logger.info(
+            f"☁️  S3 Config: enable_s3={enable_s3}, "
+            f"S3_AVAILABLE={S3_AVAILABLE}, "
+            f"bucket={os.getenv('S3_BUCKET_NAME', 'not-set')}"
+        )
+        
         if enable_s3 and S3_AVAILABLE:
             try:
                 logger.info(
@@ -1229,11 +1236,15 @@ def create_app() -> FastAPI:
                     )
             except Exception as e:
                 logger.error(
-                    f"S3 upload failed for artifact {package.id}: {e}"
+                    f"❌ S3 upload failed for artifact {package.id}: {e}",
+                    exc_info=True
                 )
                 # Don't fail the ingest - metadata is already stored
         else:
-            logger.info("S3 storage disabled - storing metadata only")
+            if not enable_s3:
+                logger.info("☁️  S3 storage disabled via ENABLE_S3_STORAGE env var")
+            elif not S3_AVAILABLE:
+                logger.warning("☁️  S3 storage not available - boto3 not installed")
         
         # Store the quality gate scores in database (only for models)
         if (artifact_type == "model" and validation_result and
