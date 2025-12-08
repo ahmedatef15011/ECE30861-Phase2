@@ -181,6 +181,19 @@ def upload_to_s3(
     """
     logger.info(f"☁️  Uploading to S3: s3://{bucket}/{s3_key}")
     
+    # Check if file already exists in S3
+    try:
+        s3_client.head_object(Bucket=bucket, Key=s3_key)
+        s3_url = f"https://{bucket}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+        logger.info(f"✅ Already exists in S3, skipping upload: {s3_url}")
+        return s3_url
+    except s3_client.exceptions.NoSuchKey:
+        # File doesn't exist, proceed with upload
+        pass
+    except Exception as e:
+        # Other error, log but continue with upload attempt
+        logger.warning(f"⚠️  Error checking S3 existence: {e}")
+    
     try:
         file_size = file_path.stat().st_size
         file_size_mb = file_size / (1024 * 1024)
