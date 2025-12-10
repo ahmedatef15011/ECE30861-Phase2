@@ -506,8 +506,12 @@ def create_app() -> FastAPI:
             expires_at=expires_at
         )
         
-        # Return token as string wrapped in quotes per spec example
-        return f"bearer {access_token}"
+        # Return token as JSON string per OpenAPI spec example
+        token_response = f"bearer {access_token}"
+        logger.info(
+            f"✅ AUTH SUCCESS: Returning token (length: {len(token_response)})"
+        )
+        return token_response
     
     # Reset endpoint - requires admin authentication
     @app.delete("/reset", tags=["system"])
