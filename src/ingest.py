@@ -57,7 +57,7 @@ class IngestValidator:
                     category=URLCategory.MODEL,
                     name=model_name,
                     platform="huggingface",
-                    owner=model_name.split("/")[0],
+                    owner=model_name.split("/")[0] if "/" in model_name else None,
                     repo=model_name.split("/")[1] if "/" in model_name else model_name,
                 )
 
