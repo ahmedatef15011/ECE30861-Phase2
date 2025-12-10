@@ -423,18 +423,18 @@ def create_app() -> FastAPI:
         This endpoint is used by the autograder to verify implemented features.
         
         Implemented Tracks:
-        - Access control track: Complete user authentication and authorization system
-          * User registration and login with JWT tokens
-          * Role-based permissions (admin, upload, download, search)
-          * Secure password hashing with bcrypt
-          * Token-based authentication for API endpoints
-          * User account management (create, read, update, delete)
+        - Other Security track: Authentication with JWT tokens
+          * User authentication with JWT tokens
+          * Token storage and validation in database
+          * Usage tracking (1000-interaction limit per token)
+          * Protected endpoints requiring authentication
+          * Admin-only endpoints with role-based access control
         
         Returns:
             Object with plannedTracks array matching OpenAPI spec enum values
         """
         return {
-            "plannedTracks": ["Access control track"]
+            "plannedTracks": ["Other Security track"]
         }
     
     # Authentication endpoint (OpenAPI spec)
