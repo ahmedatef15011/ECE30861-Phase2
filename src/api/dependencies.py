@@ -240,7 +240,12 @@ def get_current_user(
     Raises:
         UnauthorizedError: If token is invalid, expired, or limit exceeded
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     token = credentials.credentials
+    logger.info(f"🔐 AUTH CHECK: Received token (length: {len(token)})")
+    
     payload = verify_token(token)
     
     if not payload:
