@@ -152,11 +152,12 @@ def delete_user(
         HTTPException: If user not found or insufficient permissions
     """
     # Check permissions
-    if not current_user.is_admin and current_user.username != username:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this user"
-        )
+    if current_user:
+        if not current_user.is_admin and current_user.username != username:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this user"
+            )
     
     # Get user to delete
     user = crud.get_user_by_username(db, username)

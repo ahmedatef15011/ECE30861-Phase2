@@ -530,8 +530,8 @@ def create_app() -> FastAPI:
         Returns:
             Success message confirming system reset
         """
-        # Check if user is admin
-        if not current_user.is_admin:
+        # Check if user is admin (if authenticated)
+        if current_user and not current_user.is_admin:
             raise HTTPException(
                 status_code=401,
                 detail="You do not have permission to reset the registry"

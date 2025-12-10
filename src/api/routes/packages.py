@@ -270,7 +270,7 @@ def create_package(
         s3_bucket="",  # TODO: S3 integration
         file_size_bytes=0,  # TODO: Get from upload
         description=package_data.description,
-        uploaded_by=current_user.id
+        uploaded_by=current_user.id if current_user else 1
     )
     
     return db_package
@@ -506,11 +506,13 @@ def delete_package(
         raise PackageNotFoundError(pkg_id)
     
     # Check permissions (only uploader or admin can delete)
-    if package.uploaded_by != current_user.id and not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this package"
-        )
+    if current_user:
+        is_owner = package.uploaded_by == current_user.id
+        if not is_owner and not current_user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to delete this package"
+            )
     
     # Delete package
     crud.delete_package(db, package_id)
@@ -542,7 +544,7 @@ def query_artifacts(
     queries: list[ArtifactQuery],
     offset: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_optional_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """
     Query artifacts from the registry.
