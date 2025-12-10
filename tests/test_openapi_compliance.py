@@ -26,10 +26,30 @@ def client():
 
 def test_artifact_metadata_id_is_string(client):
     """Test that artifact IDs are returned as strings, not integers."""
+    # Authenticate first
+    auth_response = client.put(
+        "/authenticate",
+        json={
+            "user": {
+                "name": "ece30861defaultadminuser",
+                "is_admin": True
+            },
+            "secret": {
+                "password": (
+                    "correcthorsebatterystaple123"
+                    "(!__+@**(A'\"`;DROP TABLE packages;"
+                )
+            }
+        }
+    )
+    assert auth_response.status_code == 200
+    token = auth_response.json().replace("bearer ", "")
+    
     # Query all artifacts
     response = client.post(
         "/artifacts",
-        json=[{"name": "*"}]
+        json=[{"name": "*"}],
+        headers={"Authorization": f"Bearer {token}"}
     )
     
     assert response.status_code == 200
@@ -123,9 +143,13 @@ def test_model_rating_response_format(client):
     assert isinstance(size_score, dict), \
         f"size_score should be object, got {type(size_score)}"
     
-    required_platforms = ["raspberry_pi", "jetson_nano", "desktop_pc", "aws_server"]
+    required_platforms = [
+        "raspberry_pi", "jetson_nano", "desktop_pc", "aws_server"
+    ]
     for platform in required_platforms:
-        assert platform in size_score, f"Missing platform in size_score: {platform}"
+        assert platform in size_score, (
+            f"Missing platform in size_score: {platform}"
+        )
         assert isinstance(size_score[platform], (int, float)), \
             f"Platform score should be numeric: {platform}"
     
@@ -153,7 +177,10 @@ def test_authentication_token_format(client):
                 "is_admin": True
             },
             "secret": {
-                "password": "correcthorsebatterystaple123(!__+@**(A'\"`;DROP TABLE packages;"
+                "password": (
+                    "correcthorsebatterystaple123"
+                    "(!__+@**(A'\"`;DROP TABLE packages;"
+                )
             }
         }
     )
