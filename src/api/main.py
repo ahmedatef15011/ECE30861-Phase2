@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Query, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -72,6 +72,21 @@ async def lifespan(app: FastAPI):
     
     logger.info("Initializing database tables...")
     init_db()
+    logger.info("✅ Tables created/verified")
+    
+    # Run database migration for usage_count column if needed
+    logger.info("Running database migrations...")
+    try:
+        from migrate_add_usage_count import migrate_usage_count
+        migrate_usage_count()
+        logger.info("✅ Migrations complete")
+    except Exception as e:
+        logger.error(f"❌ Migration failed: {e}")
+        logger.error(
+            "Authentication may not work! Run migrate_add_usage_count.py "
+            "manually."
+        )
+    
     create_default_user()
     logger.info("✅ Database initialized with default admin user")
     logger.info("=" * 70)
@@ -494,19 +509,33 @@ def create_app() -> FastAPI:
         # Return token as string wrapped in quotes per spec example
         return f"bearer {access_token}"
     
-    # Reset endpoint for autograder (public, no auth required)
+    # Reset endpoint - requires admin authentication
     @app.delete("/reset", tags=["system"])
-    def reset_system():
+    def reset_system(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ):
         """
-        Reset the system to default state (empty registry with default user).
-        This endpoint is used by the autograder to reset the system between tests.
+        Reset the system to default state (empty registry).
+        This endpoint is used by the autograder to reset the system
+        between tests. Requires admin authentication.
         
         WARNING: This deletes all data including packages, scores, and users
         except for the default admin user which is recreated.
         
         Returns:
             Success message confirming system reset
+            
+        Raises:
+            HTTPException 401: User is not an admin
         """
+        # Check if user is admin
+        if not current_user.is_admin:
+            raise HTTPException(
+                status_code=401,
+                detail="You do not have permission to reset the registry"
+            )
+
         logger.info("🔄 AUTOGRADER RESET: Resetting entire system...")
         
         try:
@@ -569,6 +598,7 @@ def create_app() -> FastAPI:
         queries: list[ArtifactQuery],
         offset: Optional[str] = Query(None),
         db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Query artifacts from the registry.
@@ -631,7 +661,7 @@ def create_app() -> FastAPI:
                             Package.name == query.name
                         )
                         .all()
-                    )              
+                    )
                 if packages:
                     logger.info(
                         f"   ✓ Exact match: {len(packages)} package(s)"
@@ -699,6 +729,7 @@ def create_app() -> FastAPI:
     def search_artifacts_by_regex(
         regex_query: ArtifactRegEx,
         db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Search for artifacts using regular expression (BASELINE).
@@ -810,6 +841,7 @@ def create_app() -> FastAPI:
         artifact_type: str,
         artifact_data: ArtifactData,
         db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Ingest a new artifact from a URL.
@@ -1402,6 +1434,7 @@ def create_app() -> FastAPI:
     def get_model_rating(
         id: str,
         db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Get ratings/scores for a model artifact (BASELINE).
@@ -1580,7 +1613,7 @@ def create_app() -> FastAPI:
     def get_artifact_by_name(
         name: str,
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         List artifact metadata for this name.
@@ -1590,24 +1623,20 @@ def create_app() -> FastAPI:
         different IDs.
         
         Note: Uses :path converter to allow names with slashes (/).
-        Per OpenAPI spec, this endpoint requires X-Authorization header
-        but we accept it optionally for compatibility.
+        Requires authentication per OpenAPI spec.
         
         Args:
             name: Artifact name to search for
             db: Database session
-            x_authorization: Optional auth token (spec says required)
+            current_user: Authenticated user
             
         Returns:
             List of artifact metadata entries matching the name
         """
-        from fastapi import HTTPException, Header
+        from fastapi import HTTPException
         
         # Log query
         logger.info(f"🔍 GET /artifact/byName/{name}")
-        
-        # Note: OpenAPI spec says X-Authorization is required,
-        # but we handle it optionally for testing purposes
         
         # Search for packages with this exact name (all statuses - for transparency)
         packages = db.query(Package).filter(
@@ -1653,20 +1682,19 @@ def create_app() -> FastAPI:
         artifact_type: str,
         id: str,
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Retrieve artifact by type and ID.
         
         Per OpenAPI spec: Returns artifact with metadata and data (url).
-        OpenAPI spec requires X-Authorization header but we accept it
-        optionally for compatibility.
+        Requires authentication.
         
         Args:
             artifact_type: Type of artifact (model, dataset, code)
             id: Artifact ID
             db: Database session
-            x_authorization: Optional auth token (spec says required)
+            current_user: Authenticated user
             
         Returns:
             Artifact with metadata and data
@@ -1678,9 +1706,6 @@ def create_app() -> FastAPI:
         
         # Validate ID format
         validate_id(id)
-        
-        # Note: OpenAPI spec says X-Authorization is required,
-        # but we handle it optionally for testing purposes
         
         # Validate artifact type
         if artifact_type not in ["model", "dataset", "code"]:
@@ -2043,7 +2068,7 @@ def create_app() -> FastAPI:
         id: str,
         artifact: Artifact,
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Update artifact content (BASELINE).
@@ -2056,7 +2081,7 @@ def create_app() -> FastAPI:
             id: Artifact ID
             artifact: New artifact data
             db: Database session
-            x_authorization: Auth token
+            current_user: Authenticated user
             
         Returns:
             Success message
@@ -2126,7 +2151,7 @@ def create_app() -> FastAPI:
         artifact_type: str,
         id: str,
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Delete artifact (BASELINE).
@@ -2135,7 +2160,7 @@ def create_app() -> FastAPI:
             artifact_type: Type of artifact to delete
             id: Artifact ID
             db: Database session
-            x_authorization: Auth token
+            current_user: Authenticated user
             
         Returns:
             Success message
@@ -2197,13 +2222,12 @@ def create_app() -> FastAPI:
         id: str,
         dependency: bool = Query(False),
         db: Session = Depends(get_db),
-        current_user: Optional[User] = Depends(get_optional_user),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Get the cost of an artifact (BASELINE).
         
-        **Authentication Optional**: Can provide JWT token via Bearer
-        authentication.
+        Requires authentication.
         
         Cost is measured in KB (kilobytes) based on content size.
         Formula: standalone_cost = max(1.0, content_size_bytes / 1024.0)
@@ -2216,7 +2240,7 @@ def create_app() -> FastAPI:
             dependency: Include dependencies in cost calculation
                 (default: False)
             db: Database session
-            current_user: Optional authenticated user (from JWT token)
+            current_user: Authenticated user
             
         Returns:
             Cost information with standalone_cost and total_cost in KB
@@ -2238,10 +2262,9 @@ def create_app() -> FastAPI:
               → standalone_cost = max(1.0, 0/1024) = 1.0 KB (minimum)
               → total_cost = 1.0 KB
         """
-        user_info = current_user.username if current_user else "anonymous"
         logger.info(
             f"💰 COST QUERY: type={artifact_type}, id={id}, "
-            f"deps={dependency}, user={user_info}"
+            f"deps={dependency}, user={current_user.username}"
         )
         
         # Validate ID format
@@ -2348,7 +2371,7 @@ def create_app() -> FastAPI:
     def get_artifact_lineage(
         id: str,
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Get artifact lineage graph (BASELINE).
@@ -2359,7 +2382,7 @@ def create_app() -> FastAPI:
         Args:
             id: Artifact ID
             db: Database session
-            x_authorization: Auth token
+            current_user: Authenticated user
             
         Returns:
             Lineage graph with nodes and edges
@@ -2500,7 +2523,7 @@ def create_app() -> FastAPI:
         id: str,
         request: SimpleLicenseCheckRequest,
         db: Session = Depends(get_db),
-        x_authorization: Optional[str] = Header(None, alias="X-Authorization"),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Check license compatibility (BASELINE).
@@ -2512,7 +2535,7 @@ def create_app() -> FastAPI:
             id: Artifact ID
             request: GitHub URL to check compatibility with
             db: Database session
-            x_authorization: Auth token
+            current_user: Authenticated user
             
         Returns:
             Boolean indicating compatibility
