@@ -1341,9 +1341,122 @@ def create_app() -> FastAPI:
                 ),
                 net_score=scores.get("net_score", 0.0)
             )
+            
+            # Extract and persist lineage relationships
+            logger.info("🌳 Extracting artifact lineage...")
+            try:
+                # Use LLM to analyze dependencies
+                from src.llm.analyzer import (
+                    analyze_artifact_dependencies
+                )
+                
+                # Get config data if available
+                config_data = None
+                try:
+                    from src.hf_api import HuggingFaceAPI
+                    from src.models import ParsedURL, URLCategory
+                    
+                    if "huggingface" in url.lower():
+                        hf_api = HuggingFaceAPI()
+                        parsed_url = ParsedURL(
+                            url=url,
+                            category=URLCategory.MODEL,
+                            name=artifact_name,
+                            platform="huggingface",
+                            owner=(url_parts[-2]
+                                   if len(url_parts) >= 2
+                                   else None),
+                            repo=(url_parts[-1]
+                                  if url_parts
+                                  else artifact_name)
+                        )
+                        config_data = hf_api.get_model_config(
+                            parsed_url
+                        )
+                except Exception as e:
+                    logger.debug(f"Could not fetch config: {e}")
+                
+                # Analyze dependencies with LLM
+                lineage_metadata = analyze_artifact_dependencies(
+                    config_data=config_data,
+                    readme_content=readme_content,
+                    model_url=url
+                )
+                
+                # Store lineage metadata in package
+                package.lineage_metadata = lineage_metadata
+                db.commit()
+                
+                # Create PackageLineage entries for parent models
+                parent_models = lineage_metadata.get(
+                    "parent_models", []
+                )
+                for parent_info in parent_models:
+                    parent_id_str = parent_info.get("id")
+                    relationship = parent_info.get(
+                        "relationship", "depends_on"
+                    )
+                    
+                    # Look up parent package by name
+                    if "/" in parent_id_str:
+                        parent_name = parent_id_str.split("/")[-1]
+                    else:
+                        parent_name = parent_id_str
+                    
+                    # Find parent package in database
+                    parent_packages = db.query(Package).filter(
+                        Package.name == parent_name
+                    ).all()
+                    
+                    if parent_packages:
+                        # Use first match
+                        parent_pkg = parent_packages[0]
+                        
+                        # Create lineage relationship
+                        crud.create_lineage(
+                            db,
+                            parent_package_id=parent_pkg.id,
+                            child_package_id=package.id,
+                            relationship_type=relationship
+                        )
+                        logger.info(
+                            f"   ✓ Linked parent: {parent_name} "
+                            f"({relationship})"
+                        )
+                
+                logger.info(
+                    f"✅ Lineage extracted: "
+                    f"{len(parent_models)} parent(s)"
+                )
+                
+            except Exception as e:
+                logger.warning(f"Lineage extraction failed: {e}")
+            
+            # Trigger cascade tree score updates for dependent
+            # artifacts
+            logger.info("🔄 Updating dependent tree scores...")
+            try:
+                updated_count = crud.update_dependent_tree_scores(
+                    db,
+                    package_id=package.id,
+                    max_depth=3
+                )
+                if updated_count > 0:
+                    logger.info(
+                        f"✅ Updated tree scores for "
+                        f"{updated_count} dependent artifact(s)"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Cascade tree score update failed: {e}"
+                )
         
-        # s3_download_url is already set above (either S3 URL or source URL fallback)
-        logger.info(f"📦 Returning artifact with download_url: {s3_download_url}")
+        # s3_download_url is already set above
+        # (either S3 URL or source URL fallback)
+        logger.info(
+            f"📦 Returning artifact with download_url: "
+            f"{s3_download_url}"
+        )
         
         # Return response with download_url (per OpenAPI spec)
         return ArtifactIngestResponse(

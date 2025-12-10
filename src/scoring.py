@@ -105,6 +105,9 @@ class MetricScorer:
         reproducibility_default = MetricResult(score=0.0, latency=0)
         reviewedness_default = MetricResult(score=-1.0, latency=0)
         
+        # Calculate tree score once with current net_score as fallback
+        treescore_value = self._calculate_treescore(context, net_score)
+        
         return AuditResult(
             name=context.model_url.name,
             category="MODEL",
@@ -115,13 +118,19 @@ class MetricScorer:
             bus_factor=metric_results["bus_factor"].score,
             bus_factor_latency=metric_results["bus_factor"].latency,
             performance_claims=metric_results["performance_claims"].score,
-            performance_claims_latency=metric_results["performance_claims"].latency,
+            performance_claims_latency=metric_results[
+                "performance_claims"
+            ].latency,
             license=metric_results["license"].score,
             license_latency=metric_results["license"].latency,
             size_score=size_score_breakdown,
             size_score_latency=metric_results["size_score"].latency,
-            dataset_and_code_score=metric_results["dataset_and_code_score"].score,
-            dataset_and_code_score_latency=metric_results["dataset_and_code_score"].latency,
+            dataset_and_code_score=metric_results[
+                "dataset_and_code_score"
+            ].score,
+            dataset_and_code_score_latency=metric_results[
+                "dataset_and_code_score"
+            ].latency,
             dataset_quality=metric_results["dataset_quality"].score,
             dataset_quality_latency=metric_results["dataset_quality"].latency,
             code_quality=metric_results["code_quality"].score,
@@ -138,8 +147,8 @@ class MetricScorer:
             reviewedness_latency=metric_results.get(
                 "reviewedness", reviewedness_default
             ).latency,
-            treescore=self._calculate_treescore(context).score,
-            treescore_latency=self._calculate_treescore(context).latency,
+            treescore=treescore_value,
+            treescore_latency=0,  # Included in net_score_latency
         )
 
     def _enrich_context(self, context: ModelContext):
@@ -318,15 +327,33 @@ class MetricScorer:
         
         return results
 
-    def _calculate_treescore(self, context: ModelContext) -> MetricResult:
+    def _calculate_treescore(
+        self,
+        context: ModelContext,
+        current_net_score: float = 0.0
+    ) -> float:
         """
         Calculate TreeScore based on parent model scores from lineage.
         
         TreeScore = Average of net_scores of all parent models.
-        Returns 0.0 if no parents found or scores unavailable.
+        Falls back to current_net_score if no parents found.
+        
+        Args:
+            context: Model context with config and README
+            current_net_score: Current artifact's net_score (fallback)
+            
+        Returns:
+            TreeScore value (0.0 to 1.0)
         """
         try:
-            treescore_metric = TreeScoreMetric(hf_api=self.hf_api)
+            # Use TreeScoreMetric with database session for parent lookups
+            treescore_metric = TreeScoreMetric(
+                hf_api=self.hf_api,
+                score_fetcher=(
+                    self._create_db_score_fetcher()
+                    if self.db_session else None
+                )
+            )
             
             # Extract lineage from context
             lineage_extractor = LineageExtractor(hf_api=self.hf_api)
@@ -342,14 +369,50 @@ class MetricScorer:
             result = treescore_metric.calculate(
                 context=context,
                 lineage_graph=lineage_graph,
+                current_net_score=current_net_score
             )
             
-            logger.info(f"TreeScore calculated: {result.score:.4f}")
+            logger.info(f"TreeScore calculated: {result:.4f}")
             return result
             
         except Exception as e:
             logger.error(f"Error calculating TreeScore: {e}")
-            return MetricResult(score=0.0, latency=0)
+            # Fall back to current net score on error
+            return current_net_score
+    
+    def _create_db_score_fetcher(self):
+        """Create a score fetcher function that looks up scores in database."""
+        def fetch_score(model_id: str):
+            """Fetch net_score from database by model name."""
+            try:
+                from .database import crud
+                
+                # Extract model name from model_id
+                if "/" in model_id:
+                    model_name = model_id.split("/")[-1]
+                else:
+                    model_name = model_id
+                
+                # Look up packages by name
+                packages = crud.get_packages_by_name(
+                    self.db_session, model_name
+                )
+                
+                if packages:
+                    # Get first package with valid scores
+                    for pkg in packages:
+                        scores = crud.get_package_scores(
+                            self.db_session, pkg.id
+                        )
+                        if scores and scores.net_score >= 0:
+                            return scores.net_score
+                
+                return None
+            except Exception as e:
+                logger.debug(f"DB score lookup failed for {model_id}: {e}")
+                return None
+        
+        return fetch_score
 
     def _calculate_net_score(self, metric_results: Dict[str, Any]) -> float:
         # calculate weighted net score from individual metrics

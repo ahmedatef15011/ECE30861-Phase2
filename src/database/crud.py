@@ -412,6 +412,136 @@ def get_package_children(db: Session, package_id: int) -> List[PackageLineage]:
     ).all()
 
 
+def update_dependent_tree_scores(
+    db: Session,
+    package_id: int,
+    max_depth: int = 3,
+    visited: Optional[set] = None
+) -> int:
+    """
+    Update tree scores for all dependent (child) packages recursively.
+    
+    When a package's net_score is updated, this function recalculates
+    the tree scores for all child packages that depend on it.
+    
+    Args:
+        db: Database session
+        package_id: ID of package whose score was updated
+        max_depth: Maximum recursion depth (default 3)
+        visited: Set of already-visited package IDs (for cycle detection)
+        
+    Returns:
+        Number of packages updated
+    """
+    import logging
+    from src.scoring import MetricScorer
+    
+    logger = logging.getLogger(__name__)
+    
+    if visited is None:
+        visited = set()
+    
+    # Prevent infinite recursion
+    if package_id in visited or max_depth <= 0:
+        return 0
+    
+    visited.add(package_id)
+    updated_count = 0
+    
+    try:
+        # Get all children of this package
+        child_lineages = get_package_children(db, package_id)
+        
+        if not child_lineages:
+            logger.debug(f"No children found for package {package_id}")
+            return 0
+        
+        logger.info(
+            f"Updating tree scores for {len(child_lineages)} children "
+            f"of package {package_id}"
+        )
+        
+        for lineage in child_lineages:
+            child_id = lineage.child_package_id
+            
+            # Skip if already visited (cycle detection)
+            if child_id in visited:
+                logger.debug(
+                    f"Skipping package {child_id} (cycle detected)"
+                )
+                continue
+            
+            try:
+                # Get child package
+                child_pkg = get_package_by_id(db, child_id)
+                if not child_pkg:
+                    continue
+                
+                # Get child's current scores
+                child_scores = get_package_scores(db, child_id)
+                if not child_scores:
+                    logger.debug(
+                        f"No scores found for child package {child_id}"
+                    )
+                    continue
+                
+                # Recalculate tree score using MetricScorer
+                scorer = MetricScorer()
+                scorer.db_session = db  # Set db session for score lookups
+                
+                # Create minimal context for tree score calculation
+                from src.models import ModelContext
+                context = ModelContext(
+                    model_url=child_pkg.source_url or "",
+                    config_data=(
+                        child_pkg.lineage_metadata
+                        if child_pkg.lineage_metadata else {}
+                    ),
+                    readme_content=child_pkg.readme_content or ""
+                )
+                
+                # Calculate new tree score
+                new_tree_score = scorer._calculate_treescore(
+                    context,
+                    current_net_score=child_scores.net_score
+                )
+                
+                # Update if changed
+                if new_tree_score != child_scores.treescore:
+                    old_score = child_scores.treescore
+                    child_scores.treescore = new_tree_score
+                    db.commit()
+                    
+                    updated_count += 1
+                    logger.info(
+                        f"Updated tree score for package {child_id}: "
+                        f"{old_score:.4f} -> {new_tree_score:.4f}"
+                    )
+                    
+                    # Recursively update children of this child
+                    child_updated = update_dependent_tree_scores(
+                        db,
+                        child_id,
+                        max_depth=max_depth - 1,
+                        visited=visited
+                    )
+                    updated_count += child_updated
+                    
+            except Exception as e:
+                logger.error(
+                    f"Failed to update tree score for child {child_id}: {e}"
+                )
+                continue
+        
+        return updated_count
+        
+    except Exception as e:
+        logger.error(
+            f"Error updating dependent tree scores for {package_id}: {e}"
+        )
+        return updated_count
+
+
 # ============================================================================
 # Download History CRUD Operations
 # ============================================================================

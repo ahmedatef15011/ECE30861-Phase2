@@ -162,6 +162,18 @@ class Package(Base):
     #   "net_score": 0.84,  # if passed
     #   "failing_metrics": [...]  # if failed
     # }
+
+    lineage_metadata = Column(
+        JSON,
+        nullable=True
+    )
+    # Stores LLM-analyzed dependency information:
+    # {
+    #   "parent_models": [{"id": "owner/model", "relationship": "..."}],
+    #   "datasets": [{"id": "owner/dataset", "relationship": "..."}],
+    #   "code_repositories": [{"id": "owner/repo", "relationship": "..."}],
+    #   "analysis_metadata": {"analyzed_at": "...", "confidence": "..."}
+    # }
     
     # Relationships
     uploader = relationship("User", back_populates="packages_uploaded", foreign_keys=[uploaded_by])

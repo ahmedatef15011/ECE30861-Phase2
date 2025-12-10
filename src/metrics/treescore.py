@@ -51,6 +51,7 @@ class TreeScoreMetric:
         context: ModelContext,
         lineage_graph: Optional[LineageGraph] = None,
         parent_scores: Optional[Dict[str, float]] = None,
+        current_net_score: Optional[float] = None,
     ) -> MetricResult:
         """
         Calculate TreeScore for a model.
@@ -59,6 +60,8 @@ class TreeScoreMetric:
             context: Model context with config_data and readme_content
             lineage_graph: Pre-computed lineage graph (optional)
             parent_scores: Pre-fetched parent scores {model_id: net_score}
+            current_net_score: Current artifact's net_score
+                (fallback if no parents)
             
         Returns:
             MetricResult with treescore and latency
@@ -80,9 +83,17 @@ class TreeScoreMetric:
             parent_ids = lineage_graph.get_parent_ids()
             
             if not parent_ids:
-                logger.info("No parent models found, TreeScore = 0.0")
+                # No parents - use current artifact's net_score as fallback
+                fallback_score = (
+                    current_net_score if current_net_score is not None
+                    else 0.0
+                )
+                logger.info(
+                    f"No parent models found, TreeScore = {fallback_score} "
+                    f"(current net_score)"
+                )
                 latency = int((time.time() - start_time) * 1000)
-                return MetricResult(score=0.0, latency=latency)
+                return MetricResult(score=fallback_score, latency=latency)
             
             logger.info(f"Found {len(parent_ids)} parent models: {parent_ids}")
             
@@ -162,7 +173,8 @@ def calculate_treescore(
     context: ModelContext,
     hf_api: Optional[HuggingFaceAPI] = None,
     parent_scores: Optional[Dict[str, float]] = None,
-    db_session = None,
+    db_session=None,
+    current_net_score: Optional[float] = None,
 ) -> MetricResult:
     """
     Convenience function to calculate TreeScore.
@@ -172,6 +184,7 @@ def calculate_treescore(
         hf_api: HuggingFace API instance
         parent_scores: Optional pre-fetched parent scores
         db_session: Optional database session for looking up parent scores
+        current_net_score: Current artifact's net_score (fallback)
         
     Returns:
         MetricResult with treescore
@@ -218,4 +231,8 @@ def calculate_treescore(
         score_fetcher = db_score_fetcher
     
     metric = TreeScoreMetric(hf_api=hf_api, score_fetcher=score_fetcher)
-    return metric.calculate(context, parent_scores=parent_scores)
+    return metric.calculate(
+        context,
+        parent_scores=parent_scores,
+        current_net_score=current_net_score
+    )
