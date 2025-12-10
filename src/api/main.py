@@ -2280,9 +2280,10 @@ def create_app() -> FastAPI:
               → standalone_cost = max(1.0, 0/1024) = 1.0 KB (minimum)
               → total_cost = 1.0 KB
         """
+        user_str = current_user.username if current_user else "anonymous"
         logger.info(
             f"💰 COST QUERY: type={artifact_type}, id={id}, "
-            f"deps={dependency}, user={current_user.username}"
+            f"deps={dependency}, user={user_str}"
         )
         
         # Validate ID format
