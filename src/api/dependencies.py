@@ -228,6 +228,7 @@ def get_current_user(
 ) -> User:
     """
     Get the current authenticated user from JWT token.
+    Validates token and enforces 1000 interaction limit.
     
     Args:
         credentials: HTTP Bearer credentials containing JWT token
@@ -237,7 +238,7 @@ def get_current_user(
         Authenticated User object
         
     Raises:
-        UnauthorizedError: If token is invalid or user not found
+        UnauthorizedError: If token is invalid, expired, or limit exceeded
     """
     token = credentials.credentials
     payload = verify_token(token)
@@ -248,6 +249,17 @@ def get_current_user(
     username: Optional[str] = payload.get("sub")
     if not username:
         raise UnauthorizedError("Invalid token payload")
+    
+    # Validate token in database and check usage limit
+    auth_token = crud.get_auth_token(db, token)
+    if not auth_token:
+        raise UnauthorizedError(
+            "Token expired, revoked, or usage limit exceeded (1000 max)"
+        )
+    
+    # Increment usage count
+    if not crud.increment_token_usage(db, token):
+        raise UnauthorizedError("Failed to track token usage")
     
     user = crud.get_user_by_username(db, username)
     if not user:

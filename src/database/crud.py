@@ -121,12 +121,13 @@ def create_auth_token(
 
 
 def get_auth_token(db: Session, token: str) -> Optional[AuthToken]:
-    """Get an authentication token."""
+    """Get an authentication token if valid and under usage limit."""
     return db.query(AuthToken).filter(
         and_(
             AuthToken.token == token,
             AuthToken.is_revoked == False,
-            AuthToken.expires_at > datetime.utcnow()
+            AuthToken.expires_at > datetime.utcnow(),
+            AuthToken.usage_count < 1000  # Enforce 1000 interaction limit
         )
     ).first()
 
@@ -136,6 +137,31 @@ def revoke_token(db: Session, token: str) -> bool:
     auth_token = db.query(AuthToken).filter(AuthToken.token == token).first()
     if auth_token:
         auth_token.is_revoked = True
+        db.commit()
+        return True
+    return False
+
+
+def increment_token_usage(db: Session, token: str) -> bool:
+    """Increment the usage count for an authentication token.
+    
+    Args:
+        db: Database session
+        token: The JWT token string
+        
+    Returns:
+        True if increment successful, False if token not found or limit exceeded
+    """
+    auth_token = db.query(AuthToken).filter(
+        and_(
+            AuthToken.token == token,
+            AuthToken.is_revoked == False,
+            AuthToken.expires_at > datetime.utcnow()
+        )
+    ).first()
+    
+    if auth_token and auth_token.usage_count < 1000:
+        auth_token.usage_count += 1
         db.commit()
         return True
     return False

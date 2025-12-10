@@ -159,3 +159,28 @@ class ErrorResponse(BaseModel):
     """Schema for error responses."""
     detail: str
     error_code: Optional[str] = None
+
+
+# ============================================================================
+# Audit Trail Schemas
+# ============================================================================
+
+class AuditUser(BaseModel):
+    """User information in audit trail."""
+    name: str
+    is_admin: bool
+
+
+class AuditArtifactMetadata(BaseModel):
+    """Artifact metadata in audit trail."""
+    name: str
+    id: str
+    type: str
+
+
+class ArtifactAuditEntry(BaseModel):
+    """One entry in an artifact's audit history."""
+    user: AuditUser
+    date: datetime
+    artifact: AuditArtifactMetadata
+    action: str  # CREATE, UPDATE, DOWNLOAD, RATE, AUDIT

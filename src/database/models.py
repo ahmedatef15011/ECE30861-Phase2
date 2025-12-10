@@ -90,6 +90,7 @@ class AuthToken(Base):
     expires_at = Column(DateTime, nullable=False)
     is_revoked = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    usage_count = Column(Integer, default=0, nullable=False)  # Track API interactions (max 1000)
     
     # Relationships
     user = relationship("User", back_populates="auth_tokens")

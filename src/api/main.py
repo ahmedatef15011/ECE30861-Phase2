@@ -1757,10 +1757,13 @@ def create_app() -> FastAPI:
     def download_artifact(
         artifact_type: str,
         id: str,
-        db: Session = Depends(get_db)
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user: Optional[User] = Depends(get_optional_user)
     ):
         """
         Download artifact by redirecting to S3 or original source.
+        Records download in audit trail.
         
         If S3 storage is enabled and artifact is in S3, returns presigned
         URL. Otherwise, redirects to original HuggingFace/GitHub URL.
@@ -1768,7 +1771,9 @@ def create_app() -> FastAPI:
         Args:
             artifact_type: Type of artifact (model, dataset, code)
             id: Artifact ID
+            request: FastAPI request for IP and user agent
             db: Database session
+            current_user: Optional authenticated user
             
         Returns:
             Redirect to artifact download URL
@@ -1822,6 +1827,28 @@ def create_app() -> FastAPI:
                     package.s3_key,
                     expiration=3600
                 )
+                
+                # Record S3 download in audit trail
+                try:
+                    client_ip = request.client.host if request.client else None
+                    user_agent = request.headers.get("user-agent")
+                    user_id = current_user.id if current_user else None
+                    
+                    crud.record_download(
+                        db=db,
+                        package_id=package.id,
+                        user_id=user_id,
+                        ip_address=client_ip,
+                        user_agent=user_agent,
+                        access_granted=True,
+                        access_control_result={"source": "s3"}
+                    )
+                    logger.info(
+                        f"📝 Recorded S3 download: artifact={id}, user={user_id}"
+                    )
+                except Exception as audit_error:
+                    logger.error(f"Failed to record download audit: {audit_error}")
+                
                 logger.info(
                     f"Generated S3 download URL for artifact {id}"
                 )
@@ -1830,6 +1857,29 @@ def create_app() -> FastAPI:
                 logger.error(f"Failed to generate S3 URL: {e}")
                 # Fall through to original URL
         
+        # Record download in audit trail
+        try:
+            client_ip = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent")
+            user_id = current_user.id if current_user else None
+            
+            crud.record_download(
+                db=db,
+                package_id=package.id,
+                user_id=user_id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                access_granted=True,
+                access_control_result=None
+            )
+            logger.info(
+                f"📝 Recorded download audit: artifact={id}, "
+                f"user={user_id}, ip={client_ip}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to record download audit: {e}")
+            # Continue with download even if audit recording fails
+        
         # Fall back to original source URL
         url = getattr(package, 'source_url', '')
         if not url:
@@ -1837,6 +1887,139 @@ def create_app() -> FastAPI:
         
         logger.info(f"Redirecting to original URL for artifact {id}")
         return RedirectResponse(url=url)
+    
+    # Audit trail endpoint (NON-BASELINE)
+    @app.get(
+        "/artifact/{artifact_type}/{id}/audit",
+        response_model=list,
+        tags=["artifacts"]
+    )
+    def get_artifact_audit(
+        artifact_type: str,
+        id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+    ):
+        """
+        Retrieve audit entries for this artifact (NON-BASELINE).
+        
+        Returns historical information about the artifact including
+        what changed, when, and by whom. Tracks CREATE, UPDATE,
+        DOWNLOAD, RATE, and AUDIT actions.
+        
+        Args:
+            artifact_type: Type of artifact (model, dataset, code)
+            id: Artifact ID
+            db: Database session
+            current_user: Authenticated user
+            
+        Returns:
+            List of ArtifactAuditEntry objects
+        """
+        from src.api.schemas import ArtifactAuditEntry, AuditUser
+        from src.api.schemas import AuditArtifactMetadata
+        
+        # Validate ID format
+        validate_id(id)
+        
+        # Validate artifact type
+        if artifact_type not in ["model", "dataset", "code"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid artifact type: {artifact_type}"
+            )
+        
+        # Convert to int for database lookup
+        try:
+            package_id = int(id)
+        except ValueError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Artifact not found: {id}"
+            )
+        
+        # Check if artifact exists
+        package = crud.get_package_by_id(db, package_id)
+        if not package:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Artifact not found: {id}"
+            )
+        
+        # Get download history (DOWNLOAD actions)
+        download_history = crud.get_download_history(
+            db, package_id=package_id, limit=1000
+        )
+        
+        audit_entries = []
+        
+        # Add CREATE action (from package creation)
+        if package.uploaded_by:
+            creator = crud.get_user_by_id(db, package.uploaded_by)
+            if creator:
+                audit_entries.append(ArtifactAuditEntry(
+                    user=AuditUser(
+                        name=creator.username,
+                        is_admin=creator.is_admin
+                    ),
+                    date=package.uploaded_at,
+                    artifact=AuditArtifactMetadata(
+                        name=package.name,
+                        id=str(package.id),
+                        type=getattr(package, 'artifact_type', artifact_type)
+                    ),
+                    action="CREATE"
+                ))
+        
+        # Add UPDATE action if package was updated
+        if hasattr(package, 'updated_at') and package.updated_at:
+            if package.updated_at != package.uploaded_at:
+                updater = None
+                if package.uploaded_by:
+                    updater = crud.get_user_by_id(db, package.uploaded_by)
+                if updater:
+                    audit_entries.append(ArtifactAuditEntry(
+                        user=AuditUser(
+                            name=updater.username,
+                            is_admin=updater.is_admin
+                        ),
+                        date=package.updated_at,
+                        artifact=AuditArtifactMetadata(
+                            name=package.name,
+                            id=str(package.id),
+                            type=getattr(package, 'artifact_type', artifact_type)
+                        ),
+                        action="UPDATE"
+                    ))
+        
+        # Add DOWNLOAD actions
+        for download in download_history:
+            if download.user_id:
+                downloader = crud.get_user_by_id(db, download.user_id)
+                if downloader:
+                    audit_entries.append(ArtifactAuditEntry(
+                        user=AuditUser(
+                            name=downloader.username,
+                            is_admin=downloader.is_admin
+                        ),
+                        date=download.downloaded_at,
+                        artifact=AuditArtifactMetadata(
+                            name=package.name,
+                            id=str(package.id),
+                            type=getattr(package, 'artifact_type', artifact_type)
+                        ),
+                        action="DOWNLOAD"
+                    ))
+        
+        # Sort by date (newest first)
+        audit_entries.sort(key=lambda x: x.date, reverse=True)
+        
+        logger.info(
+            f"📋 Retrieved {len(audit_entries)} audit entries for "
+            f"artifact {id}"
+        )
+        
+        return audit_entries
     
     # PUT endpoint - Update artifact (BASELINE)
     @app.put(
