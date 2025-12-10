@@ -161,7 +161,8 @@ class IngestValidator:
             "bus_factor",
             "performance_claims",
             "dataset_and_code_score",
-            "reviewedness"
+            "reviewedness",
+            "treescore"
         ]
         
         for metric_name in metric_names:

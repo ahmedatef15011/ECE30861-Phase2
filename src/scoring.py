@@ -372,11 +372,15 @@ class MetricScorer:
                 current_net_score=current_net_score
             )
             
-            logger.info(f"TreeScore calculated: {result:.4f}")
-            return result
+            # Extract score from MetricResult
+            tree_score = result.score
+            logger.info(f"TreeScore calculated: {tree_score:.4f}")
+            return tree_score
             
         except Exception as e:
-            logger.error(f"Error calculating TreeScore: {e}")
+            logger.error(
+                f"Error calculating TreeScore: {e}", exc_info=True
+            )
             # Fall back to current net score on error
             return current_net_score
     
