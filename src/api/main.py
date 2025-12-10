@@ -517,12 +517,12 @@ def create_app() -> FastAPI:
     @app.delete("/reset", tags=["system"])
     def reset_system(
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_optional_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Reset the system to default state (empty registry).
         This endpoint is used by the autograder to reset the system
-        between tests. Authentication is optional.
+        between tests. Optional authentication.
         
         WARNING: This deletes all data including packages, scores, and users
         except for the default admin user which is recreated.
@@ -530,8 +530,8 @@ def create_app() -> FastAPI:
         Returns:
             Success message confirming system reset
         """
-        # If authenticated, check if user is admin
-        if current_user and not current_user.is_admin:
+        # Check if user is admin
+        if not current_user.is_admin:
             raise HTTPException(
                 status_code=401,
                 detail="You do not have permission to reset the registry"
@@ -599,7 +599,7 @@ def create_app() -> FastAPI:
         queries: list[ArtifactQuery],
         offset: Optional[str] = Query(None),
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Query artifacts from the registry.
@@ -730,7 +730,7 @@ def create_app() -> FastAPI:
     def search_artifacts_by_regex(
         regex_query: ArtifactRegEx,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Search for artifacts using regular expression (BASELINE).
@@ -842,7 +842,7 @@ def create_app() -> FastAPI:
         artifact_type: str,
         artifact_data: ArtifactData,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Ingest a new artifact from a URL.
@@ -1452,7 +1452,7 @@ def create_app() -> FastAPI:
     def get_model_rating(
         id: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Get ratings/scores for a model artifact (BASELINE).
@@ -1631,7 +1631,7 @@ def create_app() -> FastAPI:
     def get_artifact_by_name(
         name: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         List artifact metadata for this name.
@@ -1700,7 +1700,7 @@ def create_app() -> FastAPI:
         artifact_type: str,
         id: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Retrieve artifact by type and ID.
@@ -2086,7 +2086,7 @@ def create_app() -> FastAPI:
         id: str,
         artifact: Artifact,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Update artifact content (BASELINE).
@@ -2169,7 +2169,7 @@ def create_app() -> FastAPI:
         artifact_type: str,
         id: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Delete artifact (BASELINE).
@@ -2240,7 +2240,7 @@ def create_app() -> FastAPI:
         id: str,
         dependency: bool = Query(False),
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Get the cost of an artifact (BASELINE).
@@ -2389,7 +2389,7 @@ def create_app() -> FastAPI:
     def get_artifact_lineage(
         id: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Get artifact lineage graph (BASELINE).
@@ -2541,7 +2541,7 @@ def create_app() -> FastAPI:
         id: str,
         request: SimpleLicenseCheckRequest,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user),
+        current_user: Optional[User] = Depends(get_optional_user),
     ):
         """
         Check license compatibility (BASELINE).
