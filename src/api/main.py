@@ -911,7 +911,16 @@ def create_app() -> FastAPI:
             )
         
         # Extract full model identifier for validation (e.g., "owner/repo")
-        url_parts = url.strip("/").split("/")
+        # Clean URL: Remove protocol and domain first
+        url_clean = url.strip("/")
+        if "://" in url_clean:
+            url_clean = url_clean.split("://", 1)[1]  # Remove protocol
+        if url_clean.startswith("huggingface.co/"):
+            url_clean = url_clean.replace("huggingface.co/", "", 1)
+        elif url_clean.startswith("github.com/"):
+            url_clean = url_clean.replace("github.com/", "", 1)
+        
+        url_parts = url_clean.split("/")
         
         # Use autograder-provided name if available
         if artifact_data.name:
@@ -923,8 +932,8 @@ def create_app() -> FastAPI:
             if artifact_name.endswith('.git'):
                 artifact_name = artifact_name[:-4]
         
-        # For HuggingFace: "https://huggingface.co/owner/model" -> "owner/model"
-        # For GitHub: "https://github.com/owner/repo" -> "owner/repo"
+        # For HuggingFace: "owner/model" or "model"
+        # For GitHub: "owner/repo"
         if len(url_parts) >= 2:
             full_model_name = "/".join(url_parts[-2:])
         else:
@@ -933,8 +942,7 @@ def create_app() -> FastAPI:
         # Remove .git suffix if present (for GitHub URLs)
         if full_model_name.endswith('.git'):
             full_model_name = full_model_name[:-4]
-        
-        
+
         # Create package entry FIRST (before quality gate validation)
         # This ensures we track ALL submission attempts
         logger.info(f"📝 Creating package entry for {artifact_name}...")
@@ -1217,7 +1225,16 @@ def create_app() -> FastAPI:
                 import boto3
                 
                 # Parse repo_id from URL
-                url_parts = url.strip("/").split("/")
+                # Clean URL: Remove protocol and domain first
+                url_clean = url.strip("/")
+                if "://" in url_clean:
+                    url_clean = url_clean.split("://", 1)[1]
+                if url_clean.startswith("huggingface.co/"):
+                    url_clean = url_clean.replace("huggingface.co/", "", 1)
+                elif url_clean.startswith("github.com/"):
+                    url_clean = url_clean.replace("github.com/", "", 1)
+                
+                url_parts = url_clean.split("/")
                 if len(url_parts) >= 2:
                     repo_id = "/".join(url_parts[-2:])
                 else:

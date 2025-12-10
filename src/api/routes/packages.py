@@ -81,7 +81,17 @@ async def ingest_model(
             model_name = request.name
         else:
             # Fallback: parse model name from URL
-            url_parts = request.url.strip("/").split("/")
+            # Remove protocol and domain to get owner/repo path
+            url_clean = request.url.strip("/")
+            if "://" in url_clean:
+                # Remove protocol (https://)
+                url_clean = url_clean.split("://", 1)[1]
+            if url_clean.startswith("huggingface.co/"):
+                # Remove domain
+                url_clean = url_clean.replace("huggingface.co/", "", 1)
+            
+            # Get owner/repo (last 2 parts)
+            url_parts = url_clean.split("/")
             model_name = (
                 "/".join(url_parts[-2:])
                 if len(url_parts) >= 2
