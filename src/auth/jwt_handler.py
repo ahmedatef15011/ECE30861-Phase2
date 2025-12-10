@@ -13,7 +13,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "600"
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """
-    Generate a JWT access token.
+    Generate a JWT access token with unique identifier.
     
     Args:
         data: Dictionary containing token payload data (e.g., {"sub": username})
@@ -22,6 +22,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     Returns:
         Encoded JWT token string
     """
+    import uuid
     to_encode = data.copy()
     
     if expires_delta:
@@ -29,7 +30,11 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire})
+    # Add jti (JWT ID) for uniqueness - prevents duplicate tokens
+    to_encode.update({
+        "exp": expire,
+        "jti": str(uuid.uuid4())  # Unique token identifier
+    })
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     
     return encoded_jwt

@@ -476,9 +476,19 @@ def create_app() -> FastAPI:
             )
         
         # Create access token
+        expires_delta = timedelta(hours=10)
         access_token = create_access_token(
             data={"sub": user.username},
-            expires_delta=timedelta(hours=10)
+            expires_delta=expires_delta
+        )
+        
+        # Save token to database for usage tracking
+        expires_at = datetime.utcnow() + expires_delta
+        crud.create_auth_token(
+            db=db,
+            user_id=user.id,
+            token=access_token,
+            expires_at=expires_at
         )
         
         # Return token as string wrapped in quotes per spec example

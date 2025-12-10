@@ -326,7 +326,7 @@ def get_optional_user(
 
 
 def validate_id(id_param: str) -> None:
-    """
+    r"""
     Validate ID parameter format according to OpenAPI spec.
     
     IDs must match the pattern: ^[a-zA-Z0-9\-]+$

@@ -89,9 +89,20 @@ def login(
         raise InvalidCredentialsError()
     
     # Create access token
+    expires_delta = timedelta(hours=10)  # 10 hours as per spec
     access_token = create_access_token(
         data={"sub": user.username},
-        expires_delta=timedelta(hours=10)  # 10 hours as per spec
+        expires_delta=expires_delta
+    )
+    
+    # Save token to database for usage tracking
+    from datetime import datetime
+    expires_at = datetime.utcnow() + expires_delta
+    crud.create_auth_token(
+        db=db,
+        user_id=user.id,
+        token=access_token,
+        expires_at=expires_at
     )
     
     return {
