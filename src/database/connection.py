@@ -42,11 +42,11 @@ if DATABASE_URL.startswith("postgresql"):
     engine_kwargs.update({
         "pool_size": 5,  # Number of connections to keep in the pool
         "max_overflow": 10,  # Max extra connections beyond pool_size
-        "pool_timeout": 10,  # Seconds to wait for a connection from the pool (reduced from 30)
+        "pool_timeout": 10,  # Seconds to wait for a connection from the pool
         "pool_recycle": 3600,  # Recycle connections after 1 hour
         "connect_args": {
-            "connect_timeout": 5,  # 5 second connection timeout (reduced from 10)
-            "options": "-c statement_timeout=10000"  # 10 second query timeout
+            "connect_timeout": 5,  # 5 second connection timeout
+            # Removed statement_timeout to allow DDL operations like DROP TABLE
         }
     })
 
