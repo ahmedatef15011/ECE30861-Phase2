@@ -43,7 +43,8 @@ class TestLineageExtractor:
         
         assert len(parents) == 1
         assert parents[0][0] == "openai/whisper-small"
-        assert parents[0][1] == "based_on"
+        # base_model is normalized to "derived_from" per OpenAPI spec
+        assert parents[0][1] == "derived_from"
 
     def test_extract_from_config_merged_models(self):
         """Test extraction from merged_models list."""
@@ -63,7 +64,8 @@ class TestLineageExtractor:
         assert len(parents) == 2
         assert any(p[0] == "meta-llama/Llama-2-7b" for p in parents)
         assert any(p[0] == "mistralai/Mistral-7B-v0.1" for p in parents)
-        assert all(p[1] == "merged_from" for p in parents)
+        # merged_from is normalized to "derived_from" per OpenAPI spec
+        assert all(p[1] == "derived_from" for p in parents)
 
     def test_extract_from_readme_fine_tuned(self):
         """Test extraction from README fine-tuned pattern."""

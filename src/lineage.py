@@ -31,7 +31,66 @@ class LineageEdge:
     """Represents an edge in the lineage graph."""
     from_node_id: str  # Parent model ID
     to_node_id: str    # Child model ID (the model being analyzed)
-    relationship: str  # "fine_tuned_from", "based_on", "merged_from", etc.
+    relationship: str  # One of: "trained_on", "fine_tuned_from", "derived_from", "depends_on"
+
+
+# Valid relationship types per OpenAPI spec
+VALID_RELATIONSHIPS = {"trained_on", "fine_tuned_from", "derived_from", "depends_on"}
+
+# Mapping from various relationship names to spec-compliant ones
+RELATIONSHIP_MAPPING = {
+    # Fine-tuned relationships
+    "fine_tuned_from": "fine_tuned_from",
+    "finetuned_from": "fine_tuned_from",
+    "peft_of": "fine_tuned_from",
+    "lora_of": "fine_tuned_from",
+    "qlora_of": "fine_tuned_from",
+    
+    # Derived/based relationships -> derived_from
+    "derived_from": "derived_from",
+    "based_on": "derived_from",
+    "initialized_from": "derived_from",
+    "merged_from": "derived_from",
+    
+    # Trained relationships -> trained_on
+    "trained_on": "trained_on",
+    "trained_from": "trained_on",
+    "trained_with": "trained_on",
+    
+    # Dependency relationships -> depends_on
+    "depends_on": "depends_on",
+    "requires": "depends_on",
+    "uses": "depends_on",
+}
+
+
+def normalize_relationship(relationship: str) -> str:
+    """
+    Normalize a relationship string to one of the spec-compliant values.
+    
+    Args:
+        relationship: Raw relationship string
+        
+    Returns:
+        One of: "trained_on", "fine_tuned_from", "derived_from", "depends_on"
+    """
+    # Lowercase and clean up
+    rel_lower = relationship.lower().strip().replace("-", "_").replace(" ", "_")
+    
+    # Try direct mapping
+    if rel_lower in RELATIONSHIP_MAPPING:
+        return RELATIONSHIP_MAPPING[rel_lower]
+    
+    # Try partial matching
+    if "fine_tun" in rel_lower or "finetun" in rel_lower:
+        return "fine_tuned_from"
+    if "train" in rel_lower:
+        return "trained_on"
+    if "depend" in rel_lower or "require" in rel_lower:
+        return "depends_on"
+    
+    # Default to derived_from for unknown relationships
+    return "derived_from"
 
 
 @dataclass
@@ -102,12 +161,15 @@ class LineageExtractor:
     # README patterns indicating parent model references
     README_PARENT_PATTERNS = [
         (r'fine[- ]?tuned?\s+(?:from|on)\s+\[?([^\]\n]+)\]?', 'fine_tuned_from'),
-        (r'based\s+on\s+\[?([^\]\n]+)\]?', 'based_on'),
+        (r'based\s+on\s+\[?([^\]\n]+)\]?', 'derived_from'),
         (r'derived\s+from\s+\[?([^\]\n]+)\]?', 'derived_from'),
-        (r'starting\s+from\s+\[?([^\]\n]+)\]?', 'based_on'),
-        (r'trained\s+from\s+\[?([^\]\n]+)\]?', 'trained_from'),
-        (r'initialized\s+from\s+\[?([^\]\n]+)\]?', 'initialized_from'),
-        (r'(?:is\s+)?(?:a\s+)?(?:PEFT|LoRA|QLoRA)\s+(?:fine[- ]?tuned?\s+)?(?:version\s+)?(?:of|from)\s+\[?([^\]\n]+)\]?', 'peft_of'),
+        (r'starting\s+from\s+\[?([^\]\n]+)\]?', 'derived_from'),
+        (r'trained\s+(?:from|on|with)\s+\[?([^\]\n]+)\]?', 'trained_on'),
+        (r'initialized\s+from\s+\[?([^\]\n]+)\]?', 'derived_from'),
+        (r'(?:is\s+)?(?:a\s+)?(?:PEFT|LoRA|QLoRA)\s+(?:fine[- ]?tuned?\s+)?(?:version\s+)?(?:of|from)\s+\[?([^\]\n]+)\]?', 'fine_tuned_from'),
+        (r'depends\s+on\s+\[?([^\]\n]+)\]?', 'depends_on'),
+        (r'requires\s+\[?([^\]\n]+)\]?', 'depends_on'),
+        (r'uses\s+\[?([^\]\n]+)\]?\s+(?:as\s+)?(?:a\s+)?(?:base|backbone|encoder)', 'depends_on'),
     ]
     
     def __init__(self, hf_api: Optional[HuggingFaceAPI] = None):
@@ -214,11 +276,14 @@ class LineageExtractor:
             )
             graph.add_node(parent_node)
             
+            # Normalize relationship to spec-compliant value
+            normalized_rel = normalize_relationship(relationship)
+            
             # Add edge from parent to child
             edge = LineageEdge(
                 from_node_id=normalized_id,
                 to_node_id=model_id,
-                relationship=relationship
+                relationship=normalized_rel
             )
             graph.add_edge(edge)
             
@@ -272,12 +337,13 @@ class LineageExtractor:
                 if isinstance(value, list):
                     for item in value:
                         if isinstance(item, str) and self._is_valid_model_ref(item):
-                            parents.append((item, "merged_from"))
+                            # merged_from normalizes to derived_from
+                            parents.append((item, "derived_from"))
                         elif isinstance(item, dict):
                             # Some merge configs have structured entries
                             model_name = item.get("model") or item.get("name")
                             if model_name and self._is_valid_model_ref(model_name):
-                                parents.append((model_name, "merged_from"))
+                                parents.append((model_name, "derived_from"))
         
         # Also check model_index.json for pipeline components
         model_index = config_data.get("model_index.json", {})
@@ -286,7 +352,8 @@ class LineageExtractor:
                 if isinstance(entry, dict):
                     base = entry.get("base_model")
                     if base and self._is_valid_model_ref(base):
-                        parents.append((base, "based_on"))
+                        # based_on normalizes to derived_from
+                        parents.append((base, "derived_from"))
         
         return parents
     
@@ -327,7 +394,8 @@ class LineageExtractor:
             if base_model_match:
                 base_model = base_model_match.group(1).strip()
                 if self._is_valid_model_ref(base_model):
-                    parents.append((base_model, "base_model"))
+                    # base_model in YAML front matter -> derived_from
+                    parents.append((base_model, "derived_from"))
         
         return parents
     
@@ -403,17 +471,25 @@ class LineageExtractor:
         return None
     
     def _field_to_relationship(self, field: str) -> str:
-        """Convert a config field name to a relationship type."""
+        """
+        Convert a config field name to a spec-compliant relationship type.
+        
+        Valid relationships per OpenAPI spec:
+        - trained_on
+        - fine_tuned_from
+        - derived_from
+        - depends_on
+        """
         field_mapping = {
             "_name_or_path": "fine_tuned_from",
-            "base_model": "based_on",
+            "base_model": "derived_from",  # normalized from "based_on"
             "parent_model": "derived_from",
-            "pretrained_model_name_or_path": "pretrained_from",
-            "model_name_or_path": "based_on",
+            "pretrained_model_name_or_path": "derived_from",  # normalized from "pretrained_from"
+            "model_name_or_path": "derived_from",  # normalized from "based_on"
             "finetuned_from": "fine_tuned_from",
-            "base_model_name_or_path": "based_on",
+            "base_model_name_or_path": "derived_from",  # normalized from "based_on"
         }
-        return field_mapping.get(field, "related_to")
+        return field_mapping.get(field, "derived_from")  # default to derived_from
     
     def _get_model_id(self, model_url: ParsedURL) -> Optional[str]:
         """Get the model ID from a parsed URL."""
