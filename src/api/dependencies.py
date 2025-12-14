@@ -5,7 +5,7 @@ import re
 import signal
 import threading
 from contextlib import contextmanager
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -218,57 +218,76 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-# HTTP Bearer token security scheme
-security = HTTPBearer()
-
-
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    x_authorization: str = Header(..., alias="X-Authorization"),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Get the current authenticated user from JWT token.
+    Get the current authenticated user from JWT token in X-Authorization header.
     Validates token and enforces 1000 interaction limit.
     
     Args:
-        credentials: HTTP Bearer credentials containing JWT token
+        x_authorization: X-Authorization header containing bearer token
         db: Database session
         
     Returns:
         Authenticated User object
         
     Raises:
-        UnauthorizedError: If token is invalid, expired, or limit exceeded
+        HTTPException: 403 if token is missing, invalid, or expired
     """
     import logging
     logger = logging.getLogger(__name__)
     
-    token = credentials.credentials
+    if not x_authorization:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
+        )
+    
+    # Extract token from "bearer <token>" format
+    token = x_authorization
+    if x_authorization.lower().startswith("bearer "):
+        token = x_authorization[7:].strip()
+    
     logger.info(f"🔐 AUTH CHECK: Received token (length: {len(token)})")
     
     payload = verify_token(token)
     
     if not payload:
-        raise UnauthorizedError("Invalid or expired token")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
+        )
     
     username: Optional[str] = payload.get("sub")
     if not username:
-        raise UnauthorizedError("Invalid token payload")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
+        )
     
     # Validate token in database and check usage limit
     auth_token = crud.get_auth_token(db, token)
     if not auth_token:
-        raise UnauthorizedError(
-            "Token expired, revoked, or usage limit exceeded (1000 max)"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
         )
     
     # Increment usage count
     if not crud.increment_token_usage(db, token):
-        raise UnauthorizedError("Failed to track token usage")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
+        )
     
     user = crud.get_user_by_username(db, username)
     if not user:
-        raise UnauthorizedError("User not found")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
+        )
     
     return user
 
@@ -299,9 +318,7 @@ def get_current_admin_user(
 # Optional authentication (returns None if not authenticated)
 def get_optional_user(
     db: Session = Depends(get_db),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
-        HTTPBearer(auto_error=False)
-    )
+    x_authorization: Optional[str] = Header(None, alias="X-Authorization")
 ) -> Optional[User]:
     """
     Get current user if authenticated, otherwise return None.
@@ -309,15 +326,19 @@ def get_optional_user(
     
     Args:
         db: Database session
-        credentials: Optional HTTP Bearer credentials
+        x_authorization: Optional X-Authorization header
         
     Returns:
         User object if authenticated, None otherwise
     """
-    if not credentials:
+    if not x_authorization:
         return None
     
-    token = credentials.credentials
+    # Extract token from "bearer <token>" format
+    token = x_authorization
+    if x_authorization.lower().startswith("bearer "):
+        token = x_authorization[7:].strip()
+    
     payload = verify_token(token)
     
     if not payload:
@@ -326,6 +347,14 @@ def get_optional_user(
     username: Optional[str] = payload.get("sub")
     if not username:
         return None
+    
+    # Validate token in database
+    auth_token = crud.get_auth_token(db, token)
+    if not auth_token:
+        return None
+    
+    # Increment usage count for optional auth too
+    crud.increment_token_usage(db, token)
     
     return crud.get_user_by_username(db, username)
 
