@@ -252,22 +252,23 @@ def get_x_authorization_token(
         f"🔑 AUTH ATTEMPT: Received header value: '{x_authorization}'"
     )
     
-    if not x_authorization.startswith("bearer "):
+    # Check for "bearer " prefix (case-insensitive)
+    if not x_authorization.lower().startswith("bearer "):
         logger.warning(
             f"🔒 AUTH FAILED: Invalid format. "
             f"Received: '{x_authorization[:30]}...'"
         )
         logger.info(
-            "   Expected format: bearer <token> (lowercase 'bearer')"
+            "   Expected format: bearer <token> (Bearer or bearer accepted)"
         )
         logger.info(
             f"   Got prefix: '{x_authorization[:10]}'"
         )
         raise UnauthorizedError(
-            'Invalid X-Authorization format. Expected: "bearer <token>"'
+            'Invalid X-Authorization format. Expected: "Bearer <token>" or "bearer <token>"'
         )
     
-    # Strip "bearer " prefix (7 characters)
+    # Strip "bearer " or "Bearer " prefix (7 characters) - case-insensitive
     token = x_authorization[7:]
     logger.info(
         f"✅ AUTH: Extracted JWT token (length: {len(token)})"
@@ -291,10 +292,11 @@ def get_x_authorization_token_optional(
     if not x_authorization:
         return None
     
-    if not x_authorization.startswith("bearer "):
+    # Check for "bearer " prefix (case-insensitive)
+    if not x_authorization.lower().startswith("bearer "):
         return None
     
-    # Strip "bearer " prefix (7 characters)
+    # Strip "bearer " or "Bearer " prefix (7 characters) - case-insensitive
     return x_authorization[7:]
 
 
