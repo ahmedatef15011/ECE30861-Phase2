@@ -2561,8 +2561,10 @@ def create_app() -> FastAPI:
         
         # Try to extract lineage from HuggingFace metadata
         try:
-            # Get the model URL from package
-            model_url = package.url
+            # Get the model URL from package (source_url field)
+            model_url = getattr(package, 'source_url', None)
+            logger.info(f"   📍 Package source_url: {model_url}")
+            
             if model_url and "huggingface.co" in model_url:
                 # Parse the URL to get owner/repo
                 import re
