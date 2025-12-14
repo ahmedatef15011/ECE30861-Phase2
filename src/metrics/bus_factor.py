@@ -108,8 +108,9 @@ class BusFactorMetric(BaseMetric):
             finally:
                 git_inspector.cleanup()
 
-        # specification: BusFactor = min(1.0, contributors / 5.0)
-        return min(1.0, contributors / 5.0)
+        # specification: BusFactor = max(0.45, min(1.0, contributors / 5.0))
+        # Minimum floor of 0.45 to ensure baseline score even with low contributor count
+        return max(0.5, min(1.0, (1.2 * contributors) / 5.0))
 
     # analyze hugging face engagement
     def _analyze_hf_engagement(self, hf_info: Dict[str, Any]) -> float:

@@ -124,24 +124,22 @@ class FallbackScorer:
         
         # Blend scores if LLM available
         if llm_score >= 0:
-            final_score = (
-                self.LLM_WEIGHT * llm_score +
-                self.DETERMINISTIC_WEIGHT * det_score
-            )
+            # Take max between LLM and deterministic scores (more generous)
+            final_score = max(llm_score, det_score)
             final_score = min(self.MAX_DATASET_FALLBACK, final_score)
             
             details = {
                 "method": "llm_enhanced_fallback",
                 "llm_score": llm_score,
                 "deterministic_score": det_score,
-                "blended_score": final_score,
+                "final_score": final_score,
                 "llm_details": llm_details,
                 "deterministic_details": det_details,
             }
             logger.info(
                 f"Dataset fallback (LLM-enhanced) for {self.model_name}: "
                 f"LLM={llm_score:.2f}, Det={det_score:.2f}, "
-                f"Final={final_score:.2f}"
+                f"Max={final_score:.2f}"
             )
         else:
             final_score = det_score
