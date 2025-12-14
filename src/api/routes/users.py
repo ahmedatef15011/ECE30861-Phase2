@@ -106,7 +106,7 @@ def login(
     )
     
     return {
-        "access_token": access_token,
+        "access_token": f"bearer {access_token}",
         "token_type": "bearer",
         "user": user
     }

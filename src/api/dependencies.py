@@ -5,8 +5,7 @@ import re
 import signal
 import threading
 from contextlib import contextmanager
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 
 from src.database.connection import SessionLocal
@@ -218,12 +217,89 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-# HTTP Bearer token security scheme
-security = HTTPBearer()
+# Custom header extraction for X-Authorization with strict "bearer " prefix
+def get_x_authorization_token(
+    x_authorization: Optional[str] = Header(None, alias="X-Authorization")
+) -> str:
+    """
+    Extract JWT token from X-Authorization header.
+    Strictly requires lowercase "bearer " prefix.
+    
+    Args:
+        x_authorization: X-Authorization header value
+        
+    Returns:
+        Extracted JWT token string
+        
+    Raises:
+        UnauthorizedError: If header is missing or doesn't have "bearer " prefix
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not x_authorization:
+        logger.warning(
+            "🔒 AUTH FAILED: Missing X-Authorization header"
+        )
+        logger.info(
+            "   Expected format: X-Authorization: bearer <token>"
+        )
+        raise UnauthorizedError("Missing X-Authorization header")
+    
+    logger.info(
+        f"🔑 AUTH ATTEMPT: Received header value: '{x_authorization[:50]}...'"
+        if len(x_authorization) > 50 else
+        f"🔑 AUTH ATTEMPT: Received header value: '{x_authorization}'"
+    )
+    
+    if not x_authorization.startswith("bearer "):
+        logger.warning(
+            f"🔒 AUTH FAILED: Invalid format. "
+            f"Received: '{x_authorization[:30]}...'"
+        )
+        logger.info(
+            "   Expected format: bearer <token> (lowercase 'bearer')"
+        )
+        logger.info(
+            f"   Got prefix: '{x_authorization[:10]}'"
+        )
+        raise UnauthorizedError(
+            'Invalid X-Authorization format. Expected: "bearer <token>"'
+        )
+    
+    # Strip "bearer " prefix (7 characters)
+    token = x_authorization[7:]
+    logger.info(
+        f"✅ AUTH: Extracted JWT token (length: {len(token)})"
+    )
+    return token
+
+
+def get_x_authorization_token_optional(
+    x_authorization: Optional[str] = Header(None, alias="X-Authorization")
+) -> Optional[str]:
+    """
+    Extract JWT token from X-Authorization header (optional).
+    Returns None if header is missing or invalid.
+    
+    Args:
+        x_authorization: X-Authorization header value
+        
+    Returns:
+        Extracted JWT token string or None
+    """
+    if not x_authorization:
+        return None
+    
+    if not x_authorization.startswith("bearer "):
+        return None
+    
+    # Strip "bearer " prefix (7 characters)
+    return x_authorization[7:]
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    token: str = Depends(get_x_authorization_token),
     db: Session = Depends(get_db)
 ) -> User:
     """
@@ -231,7 +307,7 @@ def get_current_user(
     Validates token and enforces 1000 interaction limit.
     
     Args:
-        credentials: HTTP Bearer credentials containing JWT token
+        token: JWT token from X-Authorization header
         db: Database session
         
     Returns:
@@ -243,7 +319,6 @@ def get_current_user(
     import logging
     logger = logging.getLogger(__name__)
     
-    token = credentials.credentials
     logger.info(f"🔐 AUTH CHECK: Received token (length: {len(token)})")
     
     payload = verify_token(token)
@@ -299,9 +374,7 @@ def get_current_admin_user(
 # Optional authentication (returns None if not authenticated)
 def get_optional_user(
     db: Session = Depends(get_db),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
-        HTTPBearer(auto_error=False)
-    )
+    token: Optional[str] = Depends(get_x_authorization_token_optional)
 ) -> Optional[User]:
     """
     Get current user if authenticated, otherwise return None.
@@ -309,15 +382,13 @@ def get_optional_user(
     
     Args:
         db: Database session
-        credentials: Optional HTTP Bearer credentials
+        token: Optional JWT token from X-Authorization header
         
     Returns:
         User object if authenticated, None otherwise
     """
-    if not credentials:
+    if not token:
         return None
-    
-    token = credentials.credentials
     payload = verify_token(token)
     
     if not payload:

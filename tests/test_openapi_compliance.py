@@ -43,13 +43,13 @@ def test_artifact_metadata_id_is_string(client):
         }
     )
     assert auth_response.status_code == 200
-    token = auth_response.json().replace("bearer ", "")
+    token = auth_response.json()  # Already includes "bearer " prefix
     
     # Query all artifacts
     response = client.post(
         "/artifacts",
         json=[{"name": "*"}],
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"X-Authorization": token}
     )
     
     assert response.status_code == 200
