@@ -427,8 +427,8 @@ class TestLLMEnhancedScoring:
         if "method" in details and details["method"] == "llm_enhanced_fallback":
             assert "llm_score" in details
             assert "deterministic_score" in details
-            assert "blended_score" in details
-            # Blended score should be between LLM and deterministic
+            assert "final_score" in details
+            # Final score should be max of LLM and deterministic, then sqrt scaled
             assert score <= scorer.MAX_DATASET_FALLBACK
     
     @patch('src.metrics.fallback_scoring.HAS_LLM', True)

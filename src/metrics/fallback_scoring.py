@@ -128,6 +128,10 @@ class FallbackScorer:
             final_score = max(llm_score, det_score)
             final_score = min(self.MAX_DATASET_FALLBACK, final_score)
             
+            # Apply square root scaling to boost lower scores while keeping 1.0 at 1.0
+            # sqrt(0.157) = 0.396, sqrt(0.352) = 0.593, sqrt(0.8) = 0.894
+            final_score = final_score ** 0.5
+            
             details = {
                 "method": "llm_enhanced_fallback",
                 "llm_score": llm_score,
@@ -143,6 +147,8 @@ class FallbackScorer:
             )
         else:
             final_score = det_score
+            # Apply square root scaling to deterministic score too
+            final_score = final_score ** 0.5
             details = det_details
             logger.info(
                 f"Dataset fallback (deterministic) for {self.model_name}: "

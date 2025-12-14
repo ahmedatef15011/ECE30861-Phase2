@@ -65,7 +65,8 @@ def test_bus_factor_no_data(config):
     )
 
     result = metric.compute(context, config)
-    assert result.score <= 0.2  # Should get low score for no data
+    # Bus factor now has minimum of 0.5, so minimum score is sqrt(0.5) ≈ 0.707
+    assert result.score >= 0.5
 
 
 def test_bus_factor_with_hf_engagement(config):
