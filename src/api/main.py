@@ -19,9 +19,6 @@ from src.database.init_db import create_default_user
 from src.api.dependencies import get_db, get_optional_user, get_current_user, validate_id
 from src.database.models import Package, User
 from src.database import crud
-from src.lineage import LineageExtractor
-from src.hf_api import HuggingFaceAPI
-from src.models import ParsedURL, URLCategory
 
 # Configure comprehensive logging
 logging.basicConfig(
@@ -2817,7 +2814,7 @@ def create_app() -> FastAPI:
                 detail=f"Artifact does not exist: {id}"
             )
         
-        # Extract model info for lineage analysis
+        # Extract lineage from database (only ingested packages)
         nodes = []
         edges = []
         
@@ -2829,85 +2826,58 @@ def create_app() -> FastAPI:
         )
         nodes.append(root_node)
         
-        # Try to extract lineage from HuggingFace metadata
-        try:
-            # Get the model URL from package (source_url field)
-            model_url = getattr(package, 'source_url', None)
-            logger.info(f"   📍 Package source_url: {model_url}")
-            
-            if model_url and "huggingface.co" in model_url:
-                # Parse the URL to get owner/repo
-                import re
-                match = re.search(
-                    r'huggingface\.co/([^/]+)/([^/\s]+)', 
-                    model_url
+        # Get parent lineages (dependencies) from database
+        parent_lineages = crud.get_package_parents(db, package_id)
+        logger.info(f"   📍 Found {len(parent_lineages)} parent lineages in database")
+        
+        for lineage in parent_lineages:
+            parent_pkg = lineage.parent_package
+            if parent_pkg:
+                # Add parent node
+                parent_node = ArtifactLineageNode(
+                    artifact_id=str(parent_pkg.id),
+                    name=parent_pkg.name,
+                    source="database"
                 )
-                if match:
-                    owner = match.group(1)
-                    repo = match.group(2).rstrip('/')
-                    
-                    # Create ParsedURL for lineage extraction
-                    parsed_url = ParsedURL(
-                        url=model_url,
-                        category=URLCategory.MODEL,
-                        name=repo,
-                        platform="huggingface",
-                        owner=owner,
-                        repo=repo,
-                    )
-                    
-                    # Use LineageExtractor to get parent models
-                    hf_api = HuggingFaceAPI()
-                    extractor = LineageExtractor(hf_api=hf_api)
-                    
-                    # Fetch config and readme
-                    config_data = hf_api.get_model_config(parsed_url)
-                    readme_content = hf_api.get_readme_content(parsed_url)
-                    
-                    # Extract lineage (non-recursive for API response speed)
-                    lineage_graph = extractor.extract_lineage(
-                        model_url=parsed_url,
-                        config_data=config_data,
-                        readme_content=readme_content,
-                        max_depth=2,
-                        recursive=False,  # Don't recurse for API speed
-                    )
-                    
-                    # Convert lineage nodes to API format
-                    for node in lineage_graph.nodes:
-                        # Skip root node (already added)
-                        if node.metadata.get("is_root"):
-                            continue
-                        
-                        api_node = ArtifactLineageNode(
-                            artifact_id=node.artifact_id,
-                            name=node.name,
-                            source=node.source
-                        )
-                        nodes.append(api_node)
-                    
-                    # Convert lineage edges to API format
-                    for edge in lineage_graph.edges:
-                        # Map the root model ID to database ID
-                        to_id = edge.to_node_id
-                        model_id = f"{owner}/{repo}"
-                        if to_id == model_id:
-                            to_id = str(package.id)
-                        
-                        api_edge = ArtifactLineageEdge(
-                            from_node_artifact_id=edge.from_node_id,
-                            to_node_artifact_id=to_id,
-                            relationship=edge.relationship
-                        )
-                        edges.append(api_edge)
-                    
-                    logger.info(
-                        f"✅ LINEAGE: Extracted {len(nodes)} nodes, "
-                        f"{len(edges)} edges from HuggingFace"
-                    )
-        except Exception as e:
-            logger.warning(f"Could not extract HuggingFace lineage: {e}")
-            # Continue with just the root node
+                if not any(n.artifact_id == parent_node.artifact_id for n in nodes):
+                    nodes.append(parent_node)
+                
+                # Add edge from parent to child
+                edge = ArtifactLineageEdge(
+                    from_node_artifact_id=str(parent_pkg.id),
+                    to_node_artifact_id=str(package.id),
+                    relationship=lineage.relationship_type
+                )
+                edges.append(edge)
+        
+        # Get child lineages (dependents) from database
+        child_lineages = crud.get_package_children(db, package_id)
+        logger.info(f"   📍 Found {len(child_lineages)} child lineages in database")
+        
+        for lineage in child_lineages:
+            child_pkg = lineage.child_package
+            if child_pkg:
+                # Add child node
+                child_node = ArtifactLineageNode(
+                    artifact_id=str(child_pkg.id),
+                    name=child_pkg.name,
+                    source="database"
+                )
+                if not any(n.artifact_id == child_node.artifact_id for n in nodes):
+                    nodes.append(child_node)
+                
+                # Add edge from parent (current package) to child
+                edge = ArtifactLineageEdge(
+                    from_node_artifact_id=str(package.id),
+                    to_node_artifact_id=str(child_pkg.id),
+                    relationship=lineage.relationship_type
+                )
+                edges.append(edge)
+        
+        logger.info(
+            f"✅ LINEAGE: Found {len(nodes)} nodes, {len(edges)} edges "
+            f"from ingested packages"
+        )
         
         logger.info(f"✅ LINEAGE: {len(nodes)} nodes, {len(edges)} edges")
         return ArtifactLineageGraph(nodes=nodes, edges=edges)
