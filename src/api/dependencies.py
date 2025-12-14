@@ -16,6 +16,7 @@ from src.auth.jwt_handler import verify_token
 from src.utils.exceptions import UnauthorizedError
 
 
+
 # ============================================================================
 # REGEX SAFETY UTILITIES
 # ============================================================================
@@ -25,7 +26,6 @@ MAX_REGEX_LENGTH = 256
 
 # Maximum time for regex execution (seconds)
 REGEX_TIMEOUT = 0.5
-
 
 class RegexTimeoutError(Exception):
     """Exception raised when regex execution times out."""
@@ -277,6 +277,12 @@ def get_current_user(
     
     # Increment usage count
     if not crud.increment_token_usage(db, token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication failed due to invalid or missing AuthenticationToken."
+        )
+    
+    if not crud.update_time_used(db, token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Authentication failed due to invalid or missing AuthenticationToken."

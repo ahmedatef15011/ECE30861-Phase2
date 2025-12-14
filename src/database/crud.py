@@ -167,6 +167,46 @@ def increment_token_usage(db: Session, token: str) -> bool:
     return False
 
 
+def update_time_used(db: Session, token: str) -> bool:
+    """Update the last time used for an authentication token.
+    
+    Enforces a 0.5 second cooldown between token uses to prevent
+    rapid-fire requests and reduce DoS risk.
+
+    Args:
+        db: Database Session
+        token: the JWT token string
+
+    Returns:
+        True if time check passed and update successful, 
+        False if token not found, invalid, or used too recently (< 0.5s)
+    """
+    auth_token = db.query(AuthToken).filter(
+        and_(
+            AuthToken.token == token,
+            AuthToken.is_revoked == False,
+            AuthToken.expires_at > datetime.utcnow()
+        )
+    ).first()
+
+    if not auth_token:
+        return False
+    
+    # Check if token has been used before
+    if auth_token.last_used_at:
+        # Calculate time since last use
+        time_since_last_use = datetime.utcnow() - auth_token.last_used_at
+        
+        # Enforce 0.5 second cooldown
+        if time_since_last_use.total_seconds() < 0.5:
+            return False
+    
+    # Update last used time
+    auth_token.last_used_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
 # ============================================================================
 # Package CRUD Operations
 # ============================================================================

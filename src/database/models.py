@@ -91,6 +91,7 @@ class AuthToken(Base):
     is_revoked = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     usage_count = Column(Integer, default=0, nullable=False)  # Track API interactions (max 1000)
+    last_used_at = Column(DateTime, default=datetime.utcnow, nullable=True) #track last time used to prevent DDOS
     
     # Relationships
     user = relationship("User", back_populates="auth_tokens")
