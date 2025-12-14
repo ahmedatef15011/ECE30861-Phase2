@@ -135,8 +135,8 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     finally:
-        db.close()
-        # Ensure session is removed from registry to prevent holding connections
+        # For scoped_session, only call remove() - never call close()
+        # remove() cleans up the session registry without interfering with active transactions
         SessionLocal.remove()
 
 
