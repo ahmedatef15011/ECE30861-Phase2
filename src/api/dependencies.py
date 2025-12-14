@@ -215,9 +215,7 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     finally:
-        # For scoped_session, only call remove() - never call close()
-        # remove() cleans up the session registry without interfering with active transactions
-        SessionLocal.remove()
+        db.close()
 
 
 # Custom header extraction for X-Authorization with strict "bearer " prefix

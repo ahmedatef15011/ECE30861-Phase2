@@ -105,12 +105,13 @@ def enable_sqlite_regexp(dbapi_connection, connection_record):
 
 
 # Create session factory
-SessionLocal = scoped_session(sessionmaker(
+# Using regular sessionmaker instead of scoped_session for better FastAPI/async compatibility
+SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
     expire_on_commit=False
-))
+)
 
 
 def init_db() -> None:
@@ -135,9 +136,7 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     finally:
-        # For scoped_session, only call remove() - never call close()
-        # remove() cleans up the session registry without interfering with active transactions
-        SessionLocal.remove()
+        db.close()
 
 
 def reset_db(preserve_user_id: int = None) -> None:
@@ -184,12 +183,7 @@ def reset_db(preserve_user_id: int = None) -> None:
             preserve_user_id = None  # Don't try to restore if we couldn't save
     
     try:
-        logger.info("   📊 Step 1: Clearing session registry...")
-        # Clear the session registry to ensure no sessions hold locks
-        SessionLocal.remove()
-        logger.info("   ✓ Session registry cleared")
-        
-        logger.info("   📊 Step 2: Disposing connection pool...")
+        logger.info("   📊 Step 1: Disposing connection pool...")
         # Dispose all connections in the pool
         engine.dispose()
         logger.info("   ✓ Connection pool disposed")
