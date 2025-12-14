@@ -28,14 +28,29 @@ DATABASE_URL = os.getenv(
 
 # Create engine
 # For SQLite, we need check_same_thread=False for FastAPI
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args=connect_args,
-    echo=bool(os.getenv("SQL_ECHO", "False").lower() == "true"),  # Log SQL queries if SQL_ECHO=true
-    pool_pre_ping=True,  # Verify connections before using them
-)
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args=connect_args,
+        echo=bool(os.getenv("SQL_ECHO", "False").lower() == "true"),
+        pool_pre_ping=True,
+    )
+else:
+    # PostgreSQL connection pool settings
+    engine = create_engine(
+        DATABASE_URL,
+        echo=bool(os.getenv("SQL_ECHO", "False").lower() == "true"),
+        pool_pre_ping=True,  # Verify connections before using them
+        pool_size=10,  # Maximum number of permanent connections
+        max_overflow=20,  # Maximum number of temporary connections
+        pool_timeout=30,  # Timeout for getting connection from pool (seconds)
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        connect_args={
+            "connect_timeout": 10,  # Connection timeout (seconds)
+            "options": "-c statement_timeout=30000"  # Query timeout 30 seconds
+        }
+    )
 
 
 # Register REGEXP function for SQLite with timeout protection
@@ -128,5 +143,57 @@ def reset_db() -> None:
     WARNING: This will delete all data!
     Use only for testing or the /reset endpoint.
     """
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    import logging
+    from sqlalchemy import text
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        logger.info("   📊 Disposing existing connections...")
+        # Close all connections in the pool
+        engine.dispose()
+        logger.info("   ✓ Connection pool disposed")
+        
+        # For PostgreSQL: Force terminate all other connections to prevent locks
+        if DATABASE_URL.startswith("postgresql"):
+            logger.info("   🔒 Terminating active database connections...")
+            try:
+                # Create temporary connection to terminate others
+                with engine.connect() as conn:
+                    # Get database name from URL
+                    db_name = DATABASE_URL.split('/')[-1].split('?')[0]
+                    
+                    # Terminate all connections to this database except current one
+                    conn.execute(text(
+                        f"""
+                        SELECT pg_terminate_backend(pid) 
+                        FROM pg_stat_activity 
+                        WHERE datname = :db_name 
+                        AND pid <> pg_backend_pid()
+                        """
+                    ), {"db_name": db_name})
+                    conn.commit()
+                    logger.info("   ✓ Active connections terminated")
+            except Exception as term_error:
+                logger.warning(f"   ⚠️  Could not terminate connections: {term_error}")
+                logger.info("   → Proceeding anyway...")
+        
+        logger.info("   🗑️  Dropping all tables...")
+        # Drop all tables
+        Base.metadata.drop_all(bind=engine)
+        logger.info("   ✓ Tables dropped successfully")
+        
+        logger.info("   🏗️  Creating fresh tables...")
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+        logger.info("   ✓ Tables created successfully")
+        
+        logger.info("   🔄 Resetting connection pool...")
+        # Reset connection pool after structure changes
+        engine.dispose()
+        logger.info("   ✓ Connection pool reset")
+        
+    except Exception as e:
+        logger.error(f"   ❌ reset_db failed at some step: {e}")
+        logger.error(f"   Error type: {type(e).__name__}")
+        raise
