@@ -20,30 +20,31 @@ _startup_time = time.time()
 
 
 @router.get("/health", response_model=HealthResponse)
-def health_check(db: Session = Depends(get_db)):
+def health_check():
     """
     Health check endpoint.
     
-    Returns system health status, database connectivity,
-    and basic operational metrics.
+    Returns system health status and basic operational metrics.
+    Database connectivity is optional - endpoint always returns 200 OK.
     
-    Args:
-        db: Database session
-        
     Returns:
         Health status information
     """
-    # Check database connectivity
+    # Check database connectivity (non-blocking)
+    db_status = "not_checked"
     try:
+        from src.api.dependencies import get_db
+        db = next(get_db())
         db.execute("SELECT 1")
         db_status = "healthy"
+        db.close()
     except Exception as e:
-        db_status = f"unhealthy: {str(e)}"
+        db_status = f"unavailable: {str(e)[:50]}"
     
     uptime = time.time() - _startup_time
     
     return {
-        "status": "ok" if db_status == "healthy" else "degraded",
+        "status": "ok",  # Always OK - app is running
         "timestamp": datetime.utcnow(),
         "database_status": db_status,
         "uptime_seconds": uptime

@@ -103,6 +103,11 @@ Write-Host "     SQS_QUEUE_URL = $SQS_QUEUE_URL" -ForegroundColor White
 Write-Host "     ENABLE_S3_STORAGE = $ENABLE_S3_STORAGE" -ForegroundColor White
 Write-Host "     S3_BUCKET_NAME = $S3_BUCKET_NAME" -ForegroundColor White
 Write-Host "     AWS_REGION = $AWS_REGION" -ForegroundColor White
+Write-Host "     DATABASE_URL = postgresql://username:password@your-db-endpoint:5432/mlregistry" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  ⚠️  CRITICAL: Set DATABASE_URL to your RDS PostgreSQL connection string!" -ForegroundColor Red
+Write-Host "     Format: postgresql://username:password@endpoint:port/database" -ForegroundColor Gray
+Write-Host "     If you created RDS using setup-rds-postgres.sh, check /tmp/rds-connection-info.txt" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  5. Click Save → Deploy" -ForegroundColor Gray
 Write-Host "  6. Wait for deployment to complete (~3-5 minutes)" -ForegroundColor Gray

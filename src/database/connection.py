@@ -30,12 +30,27 @@ DATABASE_URL = os.getenv(
 # For SQLite, we need check_same_thread=False for FastAPI
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args=connect_args,
-    echo=bool(os.getenv("SQL_ECHO", "False").lower() == "true"),  # Log SQL queries if SQL_ECHO=true
-    pool_pre_ping=True,  # Verify connections before using them
-)
+# Configure engine with production-ready settings
+engine_kwargs = {
+    "connect_args": connect_args,
+    "echo": bool(os.getenv("SQL_ECHO", "False").lower() == "true"),  # Log SQL queries if SQL_ECHO=true
+    "pool_pre_ping": True,  # Verify connections before using them
+}
+
+# Add PostgreSQL-specific connection pool settings for production
+if DATABASE_URL.startswith("postgresql"):
+    engine_kwargs.update({
+        "pool_size": 5,  # Number of connections to keep in the pool
+        "max_overflow": 10,  # Max extra connections beyond pool_size
+        "pool_timeout": 10,  # Seconds to wait for a connection from the pool (reduced from 30)
+        "pool_recycle": 3600,  # Recycle connections after 1 hour
+        "connect_args": {
+            "connect_timeout": 5,  # 5 second connection timeout (reduced from 10)
+            "options": "-c statement_timeout=10000"  # 10 second query timeout
+        }
+    })
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 
 # Register REGEXP function for SQLite with timeout protection

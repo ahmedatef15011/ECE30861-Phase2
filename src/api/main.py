@@ -70,25 +70,33 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("☁️  S3 Storage: DISABLED (using local storage)")
     
+    # Initialize database with error handling to prevent startup blocking
     logger.info("Initializing database tables...")
-    init_db()
-    logger.info("✅ Tables created/verified")
-    
-    # Run database migration for usage_count column if needed
-    logger.info("Running database migrations...")
     try:
-        from migrate_add_usage_count import migrate_usage_count
-        migrate_usage_count()
-        logger.info("✅ Migrations complete")
+        init_db()
+        logger.info("✅ Tables created/verified")
+        
+        # Run database migration for usage_count column if needed
+        logger.info("Running database migrations...")
+        try:
+            from migrate_add_usage_count import migrate_usage_count
+            migrate_usage_count()
+            logger.info("✅ Migrations complete")
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+            logger.error(
+                "Authentication may not work! Run migrate_add_usage_count.py "
+                "manually."
+            )
+        
+        create_default_user()
+        logger.info("✅ Database initialized with default admin user")
+        
     except Exception as e:
-        logger.error(f"❌ Migration failed: {e}")
-        logger.error(
-            "Authentication may not work! Run migrate_add_usage_count.py "
-            "manually."
-        )
+        logger.error(f"❌ Database initialization failed: {e}")
+        logger.warning("⚠️  Application will start but database operations may fail!")
+        logger.warning("   Please check DATABASE_URL environment variable and database connectivity")
     
-    create_default_user()
-    logger.info("✅ Database initialized with default admin user")
     logger.info("=" * 70)
     
     yield
@@ -211,6 +219,16 @@ def create_app() -> FastAPI:
             "docs": "/docs",
             "health": "/health",
             "frontend": "/frontend"
+        }
+    
+    # Lightweight health check for AppRunner (no DB dependency)
+    @app.get("/health", tags=["root"])
+    def simple_health():
+        """Simple health check without database dependency."""
+        return {
+            "status": "ok",
+            "timestamp": datetime.utcnow().isoformat(),
+            "service": "ml-registry-api"
         }
     
     # Frontend endpoint for autograder
