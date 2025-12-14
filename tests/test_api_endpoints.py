@@ -76,7 +76,7 @@ def create_test_user(username="testuser", password="password123", is_admin=False
     # Create user
     response = client.post(
         "/api/v1/user/register",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"X-Authorization": f"Bearer {admin_token}"},
         json={
             "username": username,
             "email": f"{username}@example.com",
@@ -105,7 +105,7 @@ def create_test_package(token, name="test-model", version="1.0.0"):
     """Helper to create a test package."""
     response = client.post(
         "/api/v1/package",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Authorization": f"Bearer {token}"},
         json={
             "name": name,
             "version": version,
@@ -178,7 +178,7 @@ def test_register_user():
     # Register new user
     response = client.post(
         "/api/v1/user/register",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"X-Authorization": f"Bearer {admin_token}"},
         json={
             "username": "newuser",
             "email": "newuser@example.com",
@@ -207,7 +207,7 @@ def test_register_duplicate_user():
     
     response = client.post(
         "/api/v1/user/register",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"X-Authorization": f"Bearer {admin_token}"},
         json={
             "username": "duplicate",
             "email": "another@example.com",
@@ -226,7 +226,7 @@ def test_register_without_admin():
     
     response = client.post(
         "/api/v1/user/register",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Authorization": f"Bearer {token}"},
         json={
             "username": "unauthorized",
             "email": "unauthorized@example.com",
@@ -289,7 +289,7 @@ def test_get_current_user():
     
     response = client.get(
         "/api/v1/user/me",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"X-Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -303,7 +303,7 @@ def test_delete_own_user():
     
     response = client.delete(
         "/api/v1/user/deleteme",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"X-Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     assert "deleted successfully" in response.json()["message"]
@@ -317,7 +317,7 @@ def test_delete_other_user_as_non_admin():
     
     response = client.delete(
         "/api/v1/user/user2",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"X-Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 403
 
@@ -332,7 +332,7 @@ def test_delete_user_as_admin():
     
     response = client.delete(
         "/api/v1/user/victim",
-        headers={"Authorization": f"Bearer {admin_token}"}
+        headers={"X-Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200
 
@@ -379,8 +379,8 @@ def test_create_package_without_auth():
             "description": "Should fail"
         }
     )
-    # Accept either 401 (Unauthorized) or 403 (Forbidden)
-    assert response.status_code in [401, 403]
+    # 422 = missing required header (FastAPI validation)
+    assert response.status_code == 422
 
 
 def test_get_package_by_id():
@@ -457,7 +457,7 @@ def test_delete_package():
     # Delete package
     response = client.delete(
         f"/api/v1/package/{package_id}",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"X-Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     assert "deleted successfully" in response.json()["message"]
@@ -482,7 +482,7 @@ def test_delete_package_unauthorized():
     # Other user tries to delete
     response = client.delete(
         f"/api/v1/package/{package_id}",
-        headers={"Authorization": f"Bearer {other_token}"}
+        headers={"X-Authorization": f"Bearer {other_token}"}
     )
     assert response.status_code == 403
 
@@ -503,7 +503,7 @@ def test_admin_can_delete_any_package():
     )
     response = client.delete(
         f"/api/v1/package/{package_id}",
-        headers={"Authorization": f"Bearer {admin_token}"}
+        headers={"X-Authorization": f"Bearer {admin_token}"}
     )
     assert response.status_code == 200
 
@@ -524,7 +524,7 @@ def test_rate_package():
     # Rate package
     response = client.post(
         f"/api/v1/package/{package_id}/rate",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Authorization": f"Bearer {token}"},
         json={
             "ramp_up_time": 0.8,
             "bus_factor": 0.7,
@@ -554,7 +554,7 @@ def test_rate_nonexistent_package():
     
     response = client.post(
         "/api/v1/package/99999/rate",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Authorization": f"Bearer {token}"},
         json={
             "ramp_up_score": 0.8,
             "correctness_score": 0.9,
@@ -581,7 +581,7 @@ def test_rate_package_invalid_scores():
     # Try to rate with invalid score (>1.0)
     response = client.post(
         f"/api/v1/package/{package_id}/rate",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-Authorization": f"Bearer {token}"},
         json={
             "ramp_up_time": 1.5,  # Invalid!
             "bus_factor": 0.7,
@@ -610,21 +610,22 @@ def test_access_protected_endpoint_without_token():
             "version": "1.0.0"
         }
     )
-    # Accept either 401 (Unauthorized) or 403 (Forbidden)
-    assert response.status_code in [401, 403]
+    # 422 = missing required header (FastAPI validation)
+    assert response.status_code == 422
 
 
 def test_access_with_invalid_token():
     """Test accessing with invalid token fails."""
     response = client.post(
         "/api/v1/package",
-        headers={"Authorization": "Bearer invalid_token_here"},
+        headers={"X-Authorization": "Bearer invalid_token_here"},
         json={
             "name": "unauthorized",
             "version": "1.0.0"
         }
     )
-    assert response.status_code == 401
+    # 403 per OpenAPI spec for invalid auth
+    assert response.status_code == 403
 
 
 def test_access_with_expired_token():
@@ -633,13 +634,14 @@ def test_access_with_expired_token():
     # mocking time or waiting for actual expiration
     response = client.post(
         "/api/v1/package",
-        headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid"},
+        headers={"X-Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid"},
         json={
             "name": "unauthorized",
             "version": "1.0.0"
         }
     )
-    assert response.status_code == 401
+    # 403 per OpenAPI spec for invalid auth
+    assert response.status_code == 403
 
 
 # ============================================================================
