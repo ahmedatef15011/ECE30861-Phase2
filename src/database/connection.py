@@ -29,12 +29,13 @@ DATABASE_URL = os.getenv(
 # Create engine
 # For SQLite, we need check_same_thread=False for FastAPI
 if DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+    connect_args = {"check_same_thread": False, "timeout": 30}
     engine = create_engine(
         DATABASE_URL,
         connect_args=connect_args,
         echo=bool(os.getenv("SQL_ECHO", "False").lower() == "true"),
         pool_pre_ping=True,
+        poolclass=None,  # Use NullPool for SQLite to avoid connection issues
     )
 else:
     # PostgreSQL connection pool settings

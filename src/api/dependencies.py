@@ -210,11 +210,16 @@ def get_db() -> Generator[Session, None, None]:
     Yields:
         SQLAlchemy database session
     """
+    from src.database.connection import SessionLocal
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        finally:
+            # Always remove from registry to prevent holding connections
+            SessionLocal.remove()
 
 
 # Custom header extraction for X-Authorization with strict "bearer " prefix
