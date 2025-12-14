@@ -265,15 +265,26 @@ def reset_db(preserve_user_id: int = None) -> None:
         engine.dispose()
         logger.info("   ✓ Connection pool reset")
         
-        # Step 7: Restore the preserved token if needed
+        # Step 7: Recreate the default admin user (needed for token foreign key)
         if preserve_user_id and preserved_token:
-            logger.info(f"   📊 Step 7: Restoring token for user {preserve_user_id}...")
+            logger.info(f"   👤 Step 7a: Recreating default admin user...")
+            try:
+                from src.database.init_db import create_default_user
+                create_default_user()
+                logger.info(f"   ✓ Default admin user recreated")
+            except Exception as e:
+                logger.error(f"   ⚠️  Could not recreate default admin user: {e}")
+                logger.info("   → Token restoration may fail")
+        
+        # Step 7b: Restore the preserved token if needed
+        if preserve_user_id and preserved_token:
+            logger.info(f"   📊 Step 7b: Restoring token for user {preserve_user_id}...")
             try:
                 with engine.connect() as conn:
                     conn.execute(text(
                         """
-                        INSERT INTO auth_tokens (user_id, token, expires_at, usage_count, created_at)
-                        VALUES (:user_id, :token, :expires_at, 0, :created_at)
+                        INSERT INTO auth_tokens (user_id, token, expires_at, is_revoked, usage_count, created_at)
+                        VALUES (:user_id, :token, :expires_at, false, 0, :created_at)
                         """
                     ), {
                         "user_id": preserve_user_id,

@@ -560,10 +560,6 @@ def create_app() -> FastAPI:
             # Preserve the current user's auth token so the autograder can reuse it
             reset_db(preserve_user_id=current_user.id)
             
-            logger.info("   Creating default admin user...")
-            # Recreate the default admin user
-            create_default_user()
-            
             logger.info("✅ RESET COMPLETE: System is now in default state")
             
             return {
