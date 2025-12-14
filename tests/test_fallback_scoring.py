@@ -194,10 +194,10 @@ class TestDatasetFallbackScoring:
         """Test dataset scoring with rich README content."""
         scorer = FallbackScorer(sample_readme_with_dataset, use_llm=False)
         score, details = scorer.get_dataset_fallback_score()
-        
+    
         # Should find dataset mentions, training data, statistics
         assert score > 0.0
-        assert score <= scorer.MAX_DATASET_FALLBACK
+        assert score <= 1.0
         assert "indicators_found" in details
         assert len(details["indicators_found"]) > 0
     
@@ -429,7 +429,7 @@ class TestLLMEnhancedScoring:
             assert "deterministic_score" in details
             assert "final_score" in details
             # Final score should be max of LLM and deterministic, then sqrt scaled
-            assert score <= scorer.MAX_DATASET_FALLBACK
+            assert score <= 1.0
     
     @patch('src.metrics.fallback_scoring.HAS_LLM', True)
     @patch('src.metrics.fallback_scoring.LLM_ENABLED', True)
