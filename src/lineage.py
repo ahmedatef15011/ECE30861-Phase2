@@ -256,8 +256,8 @@ class LineageExtractor:
         readme_refs = self._extract_from_readme(readme_content)
         parent_refs.extend(readme_refs)
         
-        # Process each parent reference
-        for parent_id, relationship in parent_refs:
+        # Process each parent reference (parent_id, relationship, source)
+        for parent_id, relationship, source in parent_refs:
             # Validate and normalize the parent ID
             normalized_id = self._normalize_model_id(parent_id)
             if not normalized_id:
@@ -271,7 +271,7 @@ class LineageExtractor:
             parent_node = LineageNode(
                 artifact_id=normalized_id,
                 name=normalized_id.split("/")[-1] if "/" in normalized_id else normalized_id,
-                source="config.json" if "config" in relationship else "readme",
+                source=source,  # Use source from extraction (config_json or readme)
                 metadata={"relationship": relationship}
             )
             graph.add_node(parent_node)
@@ -308,11 +308,11 @@ class LineageExtractor:
     
     def _extract_from_config(
         self, config_data: Optional[Dict[str, Any]]
-    ) -> List[Tuple[str, str]]:
+    ) -> List[Tuple[str, str, str]]:
         """
         Extract parent model references from config.json.
         
-        Returns list of (parent_id, relationship) tuples.
+        Returns list of (parent_id, relationship, source) tuples.
         """
         parents = []
         
@@ -329,7 +329,7 @@ class LineageExtractor:
                     # Skip if it's just a local path or filename
                     if self._is_valid_model_ref(value):
                         relationship = self._field_to_relationship(field)
-                        parents.append((value, relationship))
+                        parents.append((value, relationship, "config_json"))
             
             # Check merge fields (multiple parents)
             for field in self.CONFIG_MERGE_FIELDS:
@@ -338,12 +338,12 @@ class LineageExtractor:
                     for item in value:
                         if isinstance(item, str) and self._is_valid_model_ref(item):
                             # merged_from normalizes to derived_from
-                            parents.append((item, "derived_from"))
+                            parents.append((item, "derived_from", "config_json"))
                         elif isinstance(item, dict):
                             # Some merge configs have structured entries
                             model_name = item.get("model") or item.get("name")
                             if model_name and self._is_valid_model_ref(model_name):
-                                parents.append((model_name, "derived_from"))
+                                parents.append((model_name, "derived_from", "config_json"))
         
         # Also check model_index.json for pipeline components
         model_index = config_data.get("model_index.json", {})
@@ -353,17 +353,17 @@ class LineageExtractor:
                     base = entry.get("base_model")
                     if base and self._is_valid_model_ref(base):
                         # based_on normalizes to derived_from
-                        parents.append((base, "derived_from"))
+                        parents.append((base, "derived_from", "config_json"))
         
         return parents
     
     def _extract_from_readme(
         self, readme_content: Optional[str]
-    ) -> List[Tuple[str, str]]:
+    ) -> List[Tuple[str, str, str]]:
         """
         Extract parent model references from README content.
         
-        Returns list of (parent_id, relationship) tuples.
+        Returns list of (parent_id, relationship, source) tuples.
         """
         parents = []
         
@@ -380,7 +380,7 @@ class LineageExtractor:
                 # Try to extract a valid model ID from the match
                 extracted = self._extract_model_id_from_text(model_ref)
                 if extracted and self._is_valid_model_ref(extracted):
-                    parents.append((extracted, relationship))
+                    parents.append((extracted, relationship, "readme"))
         
         # Also look for YAML front matter with base_model field
         yaml_match = re.search(r'^---\s*\n(.*?)\n---', readme_content, re.DOTALL)
@@ -395,7 +395,7 @@ class LineageExtractor:
                 base_model = base_model_match.group(1).strip()
                 if self._is_valid_model_ref(base_model):
                     # base_model in YAML front matter -> derived_from
-                    parents.append((base_model, "derived_from"))
+                    parents.append((base_model, "derived_from", "readme"))
         
         return parents
     

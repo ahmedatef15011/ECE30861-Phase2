@@ -2481,7 +2481,6 @@ def create_app() -> FastAPI:
         artifact_id: str
         name: str
         source: str
-        metadata: Optional[dict] = None
     
     class ArtifactLineageEdge(BaseModel):
         """Lineage graph edge."""
@@ -2548,14 +2547,7 @@ def create_app() -> FastAPI:
         root_node = ArtifactLineageNode(
             artifact_id=str(package.id),
             name=package.name,
-            source="database",
-            metadata={
-                "type": getattr(package, 'artifact_type', 'model'),
-                "uploaded_at": (
-                    package.uploaded_at.isoformat() 
-                    if package.uploaded_at else None
-                )
-            }
+            source="database"
         )
         nodes.append(root_node)
         
@@ -2612,8 +2604,7 @@ def create_app() -> FastAPI:
                         api_node = ArtifactLineageNode(
                             artifact_id=node.artifact_id,
                             name=node.name,
-                            source=node.source,
-                            metadata=node.metadata
+                            source=node.source
                         )
                         nodes.append(api_node)
                     
