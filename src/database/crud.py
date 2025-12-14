@@ -14,6 +14,8 @@ from .models import (
     PackageLineage,
     DownloadHistory,
     SystemHealthMetric,
+    SensitiveModuleHistory,
+    MaliciousModelReport,
 )
 
 
@@ -629,3 +631,282 @@ def get_health_metrics(
         query = query.filter(SystemHealthMetric.recorded_at <= end_time)
     
     return query.order_by(desc(SystemHealthMetric.recorded_at)).limit(limit).all()
+
+
+# ============================================================================
+# Sensitive Module History CRUD Operations
+# ============================================================================
+
+def create_sensitive_module_history(
+    db: Session,
+    package_id: int,
+    action: str,
+    user_id: Optional[int] = None,
+    field_changed: Optional[str] = None,
+    old_value: Optional[str] = None,
+    new_value: Optional[str] = None,
+    change_summary: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    additional_context: Optional[dict] = None
+) -> SensitiveModuleHistory:
+    """Create a new sensitive module history entry.
+    
+    Args:
+        db: Database session
+        package_id: ID of the package being tracked
+        action: Type of action (CREATED, UPDATED, SENSITIVITY_CHANGED, etc.)
+        user_id: ID of the user who made the change
+        field_changed: Name of the field that changed
+        old_value: Previous value (as JSON string)
+        new_value: New value (as JSON string)
+        change_summary: Human-readable summary of the change
+        ip_address: IP address of the user
+        user_agent: User agent string
+        additional_context: Extra context as JSON
+        
+    Returns:
+        Created SensitiveModuleHistory entry
+    """
+    history = SensitiveModuleHistory(
+        package_id=package_id,
+        user_id=user_id,
+        action=action,
+        field_changed=field_changed,
+        old_value=old_value,
+        new_value=new_value,
+        change_summary=change_summary,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        additional_context=additional_context
+    )
+    db.add(history)
+    db.commit()
+    db.refresh(history)
+    return history
+
+
+def get_sensitive_module_history(
+    db: Session,
+    package_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    limit: int = 100
+) -> List[SensitiveModuleHistory]:
+    """Get sensitive module history with optional filtering.
+    
+    Args:
+        db: Database session
+        package_id: Filter by package ID
+        user_id: Filter by user ID
+        action: Filter by action type
+        start_time: Filter entries after this time
+        end_time: Filter entries before this time
+        limit: Maximum number of entries to return
+        
+    Returns:
+        List of SensitiveModuleHistory entries
+    """
+    query = db.query(SensitiveModuleHistory)
+    
+    if package_id:
+        query = query.filter(SensitiveModuleHistory.package_id == package_id)
+    if user_id:
+        query = query.filter(SensitiveModuleHistory.user_id == user_id)
+    if action:
+        query = query.filter(SensitiveModuleHistory.action == action)
+    if start_time:
+        query = query.filter(SensitiveModuleHistory.changed_at >= start_time)
+    if end_time:
+        query = query.filter(SensitiveModuleHistory.changed_at <= end_time)
+    
+    return query.order_by(desc(SensitiveModuleHistory.changed_at)).limit(limit).all()
+
+
+def get_sensitive_module_history_by_package(
+    db: Session,
+    package_id: int,
+    limit: int = 100
+) -> List[SensitiveModuleHistory]:
+    """Get all history entries for a specific sensitive package.
+    
+    Args:
+        db: Database session
+        package_id: ID of the package
+        limit: Maximum number of entries to return
+        
+    Returns:
+        List of SensitiveModuleHistory entries for the package
+    """
+    return get_sensitive_module_history(db, package_id=package_id, limit=limit)
+
+
+# ============================================================================
+# Malicious Model Report CRUD Operations
+# ============================================================================
+
+def create_malicious_model_report(
+    db: Session,
+    package_id: int,
+    detection_method: str,
+    reason: str,
+    severity: str = "medium",
+    status: str = "pending",
+    evidence: Optional[dict] = None,
+    reported_by_user_id: Optional[int] = None
+) -> MaliciousModelReport:
+    """Create a new malicious model report.
+    
+    Args:
+        db: Database session
+        package_id: ID of the suspected malicious package
+        detection_method: How the model was flagged (AUTOMATED_SCAN, USER_REPORT, etc.)
+        reason: Why the model is suspected to be malicious
+        severity: Severity level (low, medium, high, critical)
+        status: Current status (pending, confirmed, dismissed, under_review)
+        evidence: Detailed evidence as JSON
+        reported_by_user_id: ID of the user who reported (if applicable)
+        
+    Returns:
+        Created MaliciousModelReport entry
+    """
+    report = MaliciousModelReport(
+        package_id=package_id,
+        reported_by_user_id=reported_by_user_id,
+        detection_method=detection_method,
+        severity=severity,
+        status=status,
+        reason=reason,
+        evidence=evidence
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return report
+
+
+def get_malicious_model_reports(
+    db: Session,
+    package_id: Optional[int] = None,
+    severity: Optional[str] = None,
+    status: Optional[str] = None,
+    detection_method: Optional[str] = None,
+    limit: int = 100
+) -> List[MaliciousModelReport]:
+    """Get malicious model reports with optional filtering.
+    
+    Args:
+        db: Database session
+        package_id: Filter by package ID
+        severity: Filter by severity level
+        status: Filter by status
+        detection_method: Filter by detection method
+        limit: Maximum number of reports to return
+        
+    Returns:
+        List of MaliciousModelReport entries
+    """
+    query = db.query(MaliciousModelReport)
+    
+    if package_id:
+        query = query.filter(MaliciousModelReport.package_id == package_id)
+    if severity:
+        query = query.filter(MaliciousModelReport.severity == severity)
+    if status:
+        query = query.filter(MaliciousModelReport.status == status)
+    if detection_method:
+        query = query.filter(MaliciousModelReport.detection_method == detection_method)
+    
+    return query.order_by(desc(MaliciousModelReport.reported_at)).limit(limit).all()
+
+
+def get_suspected_malicious_models(
+    db: Session,
+    include_dismissed: bool = False,
+    min_severity: Optional[str] = None,
+    limit: int = 100
+) -> List[MaliciousModelReport]:
+    """Get all suspected malicious models (pending, confirmed, or under_review).
+    
+    Args:
+        db: Database session
+        include_dismissed: Whether to include dismissed reports
+        min_severity: Minimum severity level to include
+        limit: Maximum number of reports to return
+        
+    Returns:
+        List of MaliciousModelReport entries for suspected malicious models
+    """
+    query = db.query(MaliciousModelReport)
+    
+    if not include_dismissed:
+        query = query.filter(MaliciousModelReport.status != "dismissed")
+    
+    # Filter by minimum severity if specified
+    severity_order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    if min_severity and min_severity in severity_order:
+        min_level = severity_order[min_severity]
+        valid_severities = [s for s, level in severity_order.items() if level >= min_level]
+        query = query.filter(MaliciousModelReport.severity.in_(valid_severities))
+    
+    return query.order_by(
+        desc(MaliciousModelReport.severity == "critical"),
+        desc(MaliciousModelReport.severity == "high"),
+        desc(MaliciousModelReport.severity == "medium"),
+        desc(MaliciousModelReport.reported_at)
+    ).limit(limit).all()
+
+
+def update_malicious_model_report_status(
+    db: Session,
+    report_id: int,
+    new_status: str,
+    reviewed_by_user_id: Optional[int] = None,
+    resolution_notes: Optional[str] = None
+) -> Optional[MaliciousModelReport]:
+    """Update the status of a malicious model report.
+    
+    Args:
+        db: Database session
+        report_id: ID of the report to update
+        new_status: New status (pending, confirmed, dismissed, under_review)
+        reviewed_by_user_id: ID of the user who reviewed
+        resolution_notes: Notes about the resolution
+        
+    Returns:
+        Updated MaliciousModelReport or None if not found
+    """
+    report = db.query(MaliciousModelReport).filter(
+        MaliciousModelReport.id == report_id
+    ).first()
+    
+    if report:
+        report.status = new_status
+        report.reviewed_by_user_id = reviewed_by_user_id
+        report.reviewed_at = datetime.utcnow()
+        if resolution_notes:
+            report.resolution_notes = resolution_notes
+        db.commit()
+        db.refresh(report)
+    
+    return report
+
+
+def get_package_malicious_reports(
+    db: Session,
+    package_id: int
+) -> List[MaliciousModelReport]:
+    """Get all malicious reports for a specific package.
+    
+    Args:
+        db: Database session
+        package_id: ID of the package
+        
+    Returns:
+        List of MaliciousModelReport entries for the package
+    """
+    return db.query(MaliciousModelReport).filter(
+        MaliciousModelReport.package_id == package_id
+    ).order_by(desc(MaliciousModelReport.reported_at)).all()

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from src.api.config import settings
-from src.api.routes import users, packages, ratings, system, llm
+from src.api.routes import users, packages, ratings, system, llm, security
 from src.database.connection import init_db, reset_db
 from src.database.init_db import create_default_user
 from src.api.dependencies import get_db, get_optional_user, get_current_user, validate_id
@@ -79,11 +79,23 @@ async def lifespan(app: FastAPI):
     try:
         from migrate_add_usage_count import migrate_usage_count
         migrate_usage_count()
-        logger.info("✅ Migrations complete")
+        logger.info("✅ Usage count migration complete")
     except Exception as e:
-        logger.error(f"❌ Migration failed: {e}")
+        logger.error(f"❌ Usage count migration failed: {e}")
         logger.error(
             "Authentication may not work! Run migrate_add_usage_count.py "
+            "manually."
+        )
+    
+    # Run database migration for security tables if needed
+    try:
+        from migrate_add_security_tables import migrate_security_tables
+        migrate_security_tables()
+        logger.info("✅ Security tables migration complete")
+    except Exception as e:
+        logger.error(f"❌ Security tables migration failed: {e}")
+        logger.error(
+            "Security features may not work! Run migrate_add_security_tables.py "
             "manually."
         )
     
@@ -199,6 +211,13 @@ def create_app() -> FastAPI:
         llm.router,
         prefix=f"{settings.API_V1_PREFIX}/llm",
         tags=["llm"]
+    )
+    
+    # Security endpoints (sensitive module history & malicious model detection)
+    app.include_router(
+        security.router,
+        prefix=f"{settings.API_V1_PREFIX}/security",
+        tags=["security"]
     )
     
     # Root endpoint

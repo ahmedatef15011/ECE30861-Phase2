@@ -113,5 +113,15 @@ Automated deployment to AWS on merge to main:
 - **Password Hashing**: Bcrypt encryption
 - **Role-Based Access**: Admin and user permissions
 - **Audit Trail**: Download history tracking
+- **Sensitive Module History**: Track changes to sensitive modules (what changed, when, and by whom)
+- **Malicious Model Detection**: Report and track models suspected to be malicious
+
+#### Security API Endpoints
+- `GET /api/v1/security/sensitive-modules/{package_id}/history` - Get history for a sensitive module
+- `GET /api/v1/security/sensitive-modules/history` - Get all sensitive module history (admin only)
+- `GET /api/v1/security/malicious-models` - Get list of suspected malicious models
+- `POST /api/v1/security/malicious-models/report` - Report a potentially malicious model
+- `GET /api/v1/security/malicious-models/{package_id}` - Get malicious reports for a package
+- `PATCH /api/v1/security/malicious-models/reports/{report_id}/status` - Update report status (admin only)
 
 **See**: [Database Documentation](src/database/README.md)

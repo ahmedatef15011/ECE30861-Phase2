@@ -337,3 +337,109 @@ class SystemHealthMetric(Base):
     
     def __repr__(self):
         return f"<SystemHealthMetric(metric_name='{self.metric_name}', value={self.metric_value})>"
+
+
+class SensitiveModuleHistory(Base):
+    """Historical tracking for sensitive module changes (Security Track requirement).
+    
+    Tracks what changed, when, and by whom for sensitive packages.
+    """
+    
+    __tablename__ = "sensitive_module_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    package_id = Column(Integer, ForeignKey("packages.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    # Change tracking
+    action = Column(String(50), nullable=False, index=True)
+    # Possible actions: "CREATED", "UPDATED", "SENSITIVITY_CHANGED", 
+    #                   "ACCESS_CONTROL_UPDATED", "DOWNLOADED", "RATED"
+    
+    # Details about what changed
+    field_changed = Column(String(100), nullable=True)  # e.g., "is_sensitive", "access_control_script"
+    old_value = Column(Text, nullable=True)  # JSON string of old value
+    new_value = Column(Text, nullable=True)  # JSON string of new value
+    change_summary = Column(Text, nullable=True)  # Human-readable summary
+    
+    # Metadata
+    changed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    user_agent = Column(String(500), nullable=True)
+    additional_context = Column(JSON, nullable=True)  # Extra context as needed
+    
+    # Relationships
+    package = relationship("Package", backref="sensitive_history")
+    user = relationship("User", backref="sensitive_module_changes")
+    
+    # Constraints
+    __table_args__ = (
+        Index('ix_sensitive_history_package_id', 'package_id'),
+        Index('ix_sensitive_history_user_id', 'user_id'),
+        Index('ix_sensitive_history_action', 'action'),
+        Index('ix_sensitive_history_changed_at', 'changed_at'),
+    )
+    
+    def __repr__(self):
+        return f"<SensitiveModuleHistory(package_id={self.package_id}, action='{self.action}', changed_at={self.changed_at})>"
+
+
+class MaliciousModelReport(Base):
+    """Tracking for models suspected to be malicious (Security Track requirement).
+    
+    Stores information about models flagged as potentially malicious,
+    including detection method, severity, and evidence.
+    """
+    
+    __tablename__ = "malicious_model_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    package_id = Column(Integer, ForeignKey("packages.id", ondelete="CASCADE"), nullable=False)
+    reported_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    # Detection information
+    detection_method = Column(String(100), nullable=False)
+    # Possible methods: "AUTOMATED_SCAN", "USER_REPORT", "SECURITY_AUDIT", 
+    #                   "ANOMALY_DETECTION", "PATTERN_MATCHING", "LLM_ANALYSIS"
+    
+    # Severity and status
+    severity = Column(String(20), nullable=False, default="medium", index=True)
+    # Possible values: "low", "medium", "high", "critical"
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    # Possible values: "pending", "confirmed", "dismissed", "under_review"
+    
+    # Evidence and details
+    reason = Column(Text, nullable=False)  # Why the model is suspected
+    evidence = Column(JSON, nullable=True)  # Detailed evidence as JSON
+    # Example evidence structure:
+    # {
+    #   "suspicious_patterns": ["base64 encoded payload", "network calls"],
+    #   "risk_indicators": ["hidden layers", "unusual file structure"],
+    #   "scan_results": {"virus_total": {...}, "custom_scan": {...}},
+    #   "confidence_score": 0.85
+    # }
+    
+    # Resolution tracking
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+    
+    # Timestamps
+    reported_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    package = relationship("Package", backref="malicious_reports")
+    reported_by = relationship("User", foreign_keys=[reported_by_user_id], backref="malicious_reports_submitted")
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id], backref="malicious_reports_reviewed")
+    
+    # Constraints
+    __table_args__ = (
+        Index('ix_malicious_report_package_id', 'package_id'),
+        Index('ix_malicious_report_severity', 'severity'),
+        Index('ix_malicious_report_status', 'status'),
+        Index('ix_malicious_report_reported_at', 'reported_at'),
+    )
+    
+    def __repr__(self):
+        return f"<MaliciousModelReport(package_id={self.package_id}, severity='{self.severity}', status='{self.status}')>"
