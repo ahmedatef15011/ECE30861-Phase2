@@ -53,3 +53,12 @@ class ForbiddenError(HTTPException):
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail
         )
+
+class AccessControlDeniedError(HTTPException):
+    """Exception raised when access control program denies access to sensitive model."""
+    
+    def __init__(self, detail: str = "Access denied by model access control policy"):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )

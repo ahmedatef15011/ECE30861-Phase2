@@ -1,7 +1,12 @@
 import re
 import time
+import subprocess
+import json
+import logging
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -174,3 +179,150 @@ def extract_performance_claims(
         "numeric_results": has_numeric,
         "citations": has_citations,
     }
+
+
+# ============================================================================
+# JavaScript Access Control Execution
+# ============================================================================
+
+def execute_access_control_program(
+    javascript_code: str,
+    timeout: int = 5
+) -> Tuple[bool, Optional[int], Optional[str]]:
+    """
+    Execute a JavaScript program for access control validation.
+    
+    The program must return an exit code of 0 to allow access.
+    Any other exit code denies access.
+    
+    Args:
+        javascript_code: The JavaScript program to execute
+        timeout: Execution timeout in seconds (default: 5)
+        
+    Returns:
+        Tuple of (access_granted, exit_code, error_message)
+        - access_granted: True if exit code is 0, False otherwise
+        - exit_code: The actual exit code from the program
+        - error_message: Error message if execution failed, None if successful
+    """
+    try:
+        # Run JavaScript using Node.js
+        # The program should explicitly exit with a code via process.exit(code)
+        result = subprocess.run(
+            ["node", "--eval", javascript_code],
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        
+        exit_code = result.returncode
+        access_granted = exit_code == 0
+        error_message = None
+        
+        if result.stderr and exit_code != 0:
+            error_message = result.stderr
+            logger.warning(f"⚠️  Access control program error: {result.stderr}")
+        else:
+            logger.info(
+                f"🔍 Access control program executed: "
+                f"exit_code={exit_code}, access_granted={access_granted}"
+            )
+        
+        return access_granted, exit_code, error_message
+        
+    except subprocess.TimeoutExpired:
+        error_msg = f"Access control program execution timeout ({timeout}s)"
+        logger.error(f"❌ {error_msg}")
+        return False, None, error_msg
+        
+    except FileNotFoundError:
+        error_msg = "Node.js not installed or not in PATH"
+        logger.error(f"❌ {error_msg}")
+        return False, None, error_msg
+        
+    except Exception as e:
+        error_msg = f"Access control program execution failed: {str(e)}"
+        logger.error(f"❌ {error_msg}")
+        return False, None, error_msg
+
+
+def validate_sensitive_model_access(
+    javascript_code: Optional[str],
+    model_name: str,
+    user_id: int,
+    timeout: int = 5
+) -> Tuple[bool, Optional[int], Optional[str]]:
+    """
+    Validate access to a sensitive model using its access control program.
+    
+    A sensitive model can only be accessed if:
+    1. An access control program is defined
+    2. The program executes successfully
+    3. The program returns exit code 0
+    
+    Args:
+        javascript_code: The access control JavaScript program (None if not set)
+        model_name: Name of the model being accessed
+        user_id: ID of the user requesting access
+        timeout: Execution timeout in seconds
+        
+    Returns:
+        Tuple of (access_granted, exit_code, error_message)
+    """
+    # If no program is defined, deny access (safety default)
+    if not javascript_code or not javascript_code.strip():
+        error_msg = "No access control program defined for sensitive model"
+        logger.warning(f"⚠️  {error_msg}: {model_name}")
+        return False, None, error_msg
+    
+    # Execute the program with context variables
+    # Inject model_name and user_id as global variables for the script
+    # Convert user_id to string if needed
+    user_id_str = str(user_id) if isinstance(user_id, int) else user_id
+    enhanced_code = f"""
+    // Access control context
+    const MODEL_NAME = "{model_name}";
+    const USER_ID = "{user_id_str}";
+    
+    // User-defined access control logic
+    {javascript_code}
+    """
+    
+    return execute_access_control_program(enhanced_code, timeout)
+
+
+def execute_with_context(
+    javascript_code: str,
+    context: dict,
+    timeout: int = 5
+) -> Tuple[bool, Optional[int], Optional[str]]:
+    """
+    Execute JavaScript with provided context variables.
+    
+    Args:
+        javascript_code: The JavaScript program
+        context: Dictionary of variables to inject as globals
+        timeout: Execution timeout in seconds
+        
+    Returns:
+        Tuple of (success, exit_code, error_message)
+    """
+    # Build context initialization code
+    context_code = ""
+    for key, value in context.items():
+        if isinstance(value, str):
+            # Escape quotes in string values
+            escaped = value.replace('"', '\\"')
+            context_code += f'const {key} = "{escaped}";\n'
+        elif isinstance(value, (int, float)):
+            context_code += f'const {key} = {value};\n'
+        elif isinstance(value, bool):
+            context_code += f'const {key} = {str(value).lower()};\n'
+        else:
+            # For complex types, use JSON
+            context_code += f'const {key} = {json.dumps(value)};\n'
+    
+    # Combine context and code
+    enhanced_code = context_code + "\n" + javascript_code
+    
+    return execute_access_control_program(enhanced_code, timeout)

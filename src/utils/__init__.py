@@ -17,6 +17,9 @@ extract_model_size_from_text = _utils_module.extract_model_size_from_text
 parse_license_from_readme = _utils_module.parse_license_from_readme
 check_readme_sections = _utils_module.check_readme_sections
 extract_performance_claims = _utils_module.extract_performance_claims
+execute_access_control_program = _utils_module.execute_access_control_program
+validate_sensitive_model_access = _utils_module.validate_sensitive_model_access
+execute_with_context = _utils_module.execute_with_context
 
 # Import exceptions from this package
 from .exceptions import (
@@ -33,6 +36,9 @@ __all__ = [
     "parse_license_from_readme",
     "check_readme_sections",
     "extract_performance_claims",
+    "execute_access_control_program",
+    "validate_sensitive_model_access",
+    "execute_with_context",
     # From exceptions.py in this package
     "UserNotFoundError",
     "PackageNotFoundError",

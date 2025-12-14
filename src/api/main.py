@@ -1946,6 +1946,9 @@ def create_app() -> FastAPI:
         Download artifact by redirecting to S3 or original source.
         Records download in audit trail.
         
+        For sensitive models: Executes access control JavaScript program.
+        Model only downloads if program returns exit code 0.
+        
         If S3 storage is enabled and artifact is in S3, returns presigned
         URL. Otherwise, redirects to original HuggingFace/GitHub URL.
         
@@ -1954,7 +1957,7 @@ def create_app() -> FastAPI:
             id: Artifact ID
             request: FastAPI request for IP and user agent
             db: Database session
-            current_user: Optional authenticated user
+            current_user: Authenticated user
             
         Returns:
             Redirect to artifact download URL
@@ -1993,6 +1996,76 @@ def create_app() -> FastAPI:
                 detail=f"Artifact {id} is not of type {artifact_type}"
             )
         
+        # ====================================================================
+        # SENSITIVE MODEL ACCESS CONTROL
+        # ====================================================================
+        access_control_result = None
+        access_granted = True
+        
+        is_sensitive = getattr(package, 'is_sensitive', False)
+        if is_sensitive:
+            logger.info(f"🔐 Sensitive model access control check: {package.name}")
+            access_control_script = getattr(package, 'access_control_script', None)
+            
+            if not access_control_script or not access_control_script.strip():
+                # No access control script defined for sensitive model - DENY
+                logger.error(f"❌ No access control program for sensitive model: {package.name}")
+                access_control_result = {
+                    "error": "No access control program defined for sensitive model",
+                    "exit_code": None
+                }
+                access_granted = False
+            else:
+                # Execute the access control program
+                from src.utils import validate_sensitive_model_access
+                
+                access_granted, exit_code, error_msg = validate_sensitive_model_access(
+                    javascript_code=access_control_script,
+                    model_name=package.name,
+                    user_id=current_user.id,
+                    timeout=5
+                )
+                
+                access_control_result = {
+                    "exit_code": exit_code,
+                    "error": error_msg
+                }
+                
+                if not access_granted:
+                    logger.warning(
+                        f"❌ Access denied by control program: {package.name} "
+                        f"(exit_code={exit_code}, error={error_msg})"
+                    )
+                    # Record denied access in audit trail
+                    try:
+                        client_ip = request.client.host if request.client else None
+                        user_agent = request.headers.get("user-agent")
+                        user_id = current_user.id
+                        
+                        crud.record_download(
+                            db=db,
+                            package_id=package.id,
+                            user_id=user_id,
+                            ip_address=client_ip,
+                            user_agent=user_agent,
+                            access_granted=False,
+                            access_control_result=access_control_result
+                        )
+                        logger.info(f"📝 Recorded denied download audit")
+                    except Exception as audit_error:
+                        logger.error(f"Failed to record access denial audit: {audit_error}")
+                    
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Access denied by model access control policy: {error_msg or 'exit code non-zero'}"
+                    )
+                else:
+                    logger.info(f"✅ Access granted by control program: {package.name}")
+        
+        # ====================================================================
+        # Normal download flow (after access control passed)
+        # ====================================================================
+        
         # Check if S3 storage is enabled and artifact is in S3
         enable_s3 = os.getenv(
             "ENABLE_S3_STORAGE",
@@ -2015,6 +2088,10 @@ def create_app() -> FastAPI:
                     user_agent = request.headers.get("user-agent")
                     user_id = current_user.id if current_user else None
                     
+                    audit_result = {"source": "s3"}
+                    if access_control_result:
+                        audit_result["access_control"] = access_control_result
+                    
                     crud.record_download(
                         db=db,
                         package_id=package.id,
@@ -2022,7 +2099,7 @@ def create_app() -> FastAPI:
                         ip_address=client_ip,
                         user_agent=user_agent,
                         access_granted=True,
-                        access_control_result={"source": "s3"}
+                        access_control_result=audit_result
                     )
                     logger.info(
                         f"📝 Recorded S3 download: artifact={id}, user={user_id}"
@@ -2044,6 +2121,10 @@ def create_app() -> FastAPI:
             user_agent = request.headers.get("user-agent")
             user_id = current_user.id  # Authentication is now required
             
+            audit_result = {}
+            if access_control_result:
+                audit_result["access_control"] = access_control_result
+            
             crud.record_download(
                 db=db,
                 package_id=package.id,
@@ -2051,7 +2132,7 @@ def create_app() -> FastAPI:
                 ip_address=client_ip,
                 user_agent=user_agent,
                 access_granted=True,
-                access_control_result=None
+                access_control_result=audit_result if audit_result else None
             )
             logger.info(
                 f"📝 Recorded download audit: artifact={id}, "
@@ -2201,6 +2282,188 @@ def create_app() -> FastAPI:
         )
         
         return audit_entries
+    
+    # PUT endpoint - Set sensitive model access control script
+    @app.put(
+        "/artifact/model/{id}/access-control",
+        tags=["artifacts"],
+        status_code=200
+    )
+    async def set_access_control_script(
+        id: str,
+        request_body: dict,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+    ):
+        """
+        Upload or update access control JavaScript program for a sensitive model.
+        
+        The JavaScript program must:
+        - Define a function or code that calls process.exit(0) for access allowed
+        - Call process.exit(non-zero) for access denied
+        - Complete within 5 seconds
+        
+        Context variables available to the script:
+        - MODEL_NAME: Name of the model
+        - USER_ID: ID of the user requesting access
+        
+        Example:
+        ```javascript
+        // Allow download only if user is admin (ID == 1)
+        if (USER_ID === 1) {
+            process.exit(0);  // Allow access
+        } else {
+            process.exit(1);  // Deny access
+        }
+        ```
+        
+        Args:
+            id: Model ID
+            request_body: {"javascript_code": "..."}
+            db: Database session
+            current_user: Authenticated user (must own the model)
+            
+        Returns:
+            Success message and validation result
+        """
+        logger.info(f"📝 Setting access control script for model {id}")
+        
+        # Validate ID format
+        validate_id(id)
+        
+        # Get the model
+        try:
+            model_id = int(id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail=f"Model not found: {id}")
+        
+        package = crud.get_package_by_id(db, model_id)
+        if not package:
+            raise HTTPException(status_code=404, detail=f"Model not found: {id}")
+        
+        # Check ownership (only creator can update)
+        if package.uploaded_by != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to update this model"
+            )
+        
+        # Get JavaScript code from request
+        javascript_code = request_body.get("javascript_code", "").strip()
+        if not javascript_code:
+            raise HTTPException(
+                status_code=400,
+                detail="javascript_code is required and cannot be empty"
+            )
+        
+        # Validate JavaScript by running a test execution
+        logger.info(f"🔍 Validating JavaScript syntax...")
+        from src.utils import execute_with_context
+        
+        test_context = {
+            "MODEL_NAME": package.name,
+            "USER_ID": current_user.id
+        }
+        
+        try:
+            success, exit_code, error_msg = execute_with_context(
+                javascript_code,
+                test_context,
+                timeout=5
+            )
+            
+            # Note: We don't care about the exit code here, just that it executed
+            # If there's a runtime error, error_msg will be set
+            if error_msg and "SyntaxError" in error_msg:
+                logger.error(f"❌ JavaScript syntax error: {error_msg}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"JavaScript syntax error: {error_msg}"
+                )
+            
+            logger.info(f"✅ JavaScript validation passed (exit_code={exit_code})")
+            
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
+            logger.error(f"❌ JavaScript validation failed: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"JavaScript validation failed: {str(e)}"
+            )
+        
+        # Update the model with the access control script
+        package.access_control_script = javascript_code
+        package.is_sensitive = True  # Mark as sensitive if not already
+        db.commit()
+        
+        logger.info(f"✅ Access control script updated for model {id}")
+        
+        return {
+            "message": "Access control script updated successfully",
+            "model_id": model_id,
+            "model_name": package.name,
+            "is_sensitive": True,
+            "validation": {
+                "syntax_valid": True,
+                "execution_test": "passed"
+            }
+        }
+    
+    # GET endpoint - Retrieve access control script
+    @app.get(
+        "/artifact/model/{id}/access-control",
+        tags=["artifacts"],
+        status_code=200
+    )
+    async def get_access_control_script(
+        id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+    ):
+        """
+        Retrieve the access control JavaScript program for a model.
+        
+        Only the model owner or admins can view the script.
+        
+        Args:
+            id: Model ID
+            db: Database session
+            current_user: Authenticated user
+            
+        Returns:
+            JavaScript program and metadata
+        """
+        logger.info(f"📖 Retrieving access control script for model {id}")
+        
+        # Validate ID format
+        validate_id(id)
+        
+        # Get the model
+        try:
+            model_id = int(id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail=f"Model not found: {id}")
+        
+        package = crud.get_package_by_id(db, model_id)
+        if not package:
+            raise HTTPException(status_code=404, detail=f"Model not found: {id}")
+        
+        # Check permissions (owner or admin can view)
+        if package.uploaded_by != current_user.id and not current_user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to view this model's access control script"
+            )
+        
+        # Return the script
+        return {
+            "model_id": model_id,
+            "model_name": package.name,
+            "is_sensitive": getattr(package, 'is_sensitive', False),
+            "javascript_code": getattr(package, 'access_control_script', None),
+            "has_access_control": bool(getattr(package, 'access_control_script', None))
+        }
     
     # PUT endpoint - Update artifact (BASELINE)
     @app.put(
