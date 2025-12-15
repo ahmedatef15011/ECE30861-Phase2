@@ -90,16 +90,16 @@ def test_bus_factor_with_hf_engagement(config):
 @pytest.mark.parametrize(
     "readme_content,expected_range",
     [
-        ("No performance data", (0.0, 0.2)),
-        ("GLUE benchmark: 82.3% accuracy", (0.3, 0.6)),
+        ("No performance data", (0.0, 0.16)),  # 0.1 * 0.8 = 0.08 scaled
+        ("GLUE benchmark: 82.3% accuracy", (0.2, 0.48)),  # 0.5 * 0.8 = 0.4 scaled
         (
             "MMLU score: 0.85\nSee paper: https://arxiv.org/abs/2301.00001",
-            (0.6, 1.0),
+            (0.48, 0.8),  # 0.75 * 0.8 = 0.6 scaled
         ),
         (
             "Performance on GLUE: 85.2%\nMMLU: 0.87\nCitation: "
             "[Paper](https://link.com)",
-            (0.7, 1.0),
+            (0.56, 0.8),  # 0.85 * 0.8 = 0.68 scaled
         ),
     ],
 )
@@ -151,10 +151,10 @@ def test_size_score_name_patterns(model_name, expected_size, config):
 @pytest.mark.parametrize(
     "has_datasets,has_code,expected_min",
     [
-        (False, False, 0.1),  # Base score only
-        (True, False, 0.4),  # Dataset bonus
-        (False, True, 0.3),  # Code bonus
-        (True, True, 0.7),  # Both bonuses
+        (False, False, 0.08),  # 0.1 * 0.8 = 0.08
+        (True, False, 0.4),  # 0.5 * 0.8 = 0.4
+        (False, True, 0.4),  # 0.5 * 0.8 = 0.4
+        (True, True, 0.8),  # 1.0 * 0.8 = 0.8
     ],
 )
 def test_dataset_code_combinations(has_datasets, has_code, expected_min, config):

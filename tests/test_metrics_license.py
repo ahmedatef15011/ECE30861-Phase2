@@ -50,8 +50,8 @@ def test_compute_no_license(license_metric, model_context, config):
     result = license_metric.compute(model_context, config)
 
     assert (
-        abs(result.score - 0.3) < 0.01
-    )  # 1.0 - 0.7 penalty (allow for floating point precision)
+        abs(result.score - 0.24) < 0.01
+    )  # 0.3 * 0.8 = 0.24 (scaled down)
     assert result.latency >= 0
 
 
@@ -61,7 +61,7 @@ def test_compute_hf_license(license_metric, model_context, config):
 
     result = license_metric.compute(model_context, config)
 
-    assert result.score == 1.0  # Full score for compatible license
+    assert abs(result.score - 0.8) < 0.001  # 1.0 * 0.8 (scaled down)
     assert result.latency >= 0
 
 
@@ -76,7 +76,7 @@ def test_compute_readme_license(license_metric, model_context, config):
 
     result = license_metric.compute(model_context, config)
 
-    assert result.score == 1.0  # Full score for compatible license
+    assert abs(result.score - 0.8) < 0.001  # 1.0 * 0.8 (scaled down)
     assert result.latency >= 0
 
 
@@ -91,7 +91,7 @@ def test_compute_restrictive_license(license_metric, model_context, config):
 
     result = license_metric.compute(model_context, config)
 
-    assert result.score == 0.7  # 1.0 - 0.3 penalty
+    assert abs(result.score - 0.56) < 0.001  # 0.7 * 0.8 (scaled down)
     assert result.latency >= 0
 
 
@@ -106,5 +106,5 @@ def test_compute_unknown_license(license_metric, model_context, config):
 
     result = license_metric.compute(model_context, config)
 
-    assert result.score == 0.5  # Medium score for unknown license
+    assert abs(result.score - 0.4) < 0.001  # 0.5 * 0.8 (scaled down)
     assert result.latency >= 0

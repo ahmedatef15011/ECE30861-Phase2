@@ -48,7 +48,7 @@ def test_compute_no_readme(ramp_up_metric, model_context, config):
     """Test computation with no README."""
     result = ramp_up_metric.compute(model_context, config)
 
-    assert result.score == 0.1  # Low score for missing README
+    assert abs(result.score - 0.625) < 0.01  # 0.1 * 0.8 = 0.08, mapped to [0.6, 0.85]: 0.6 + (0.08/0.8)*0.25 = 0.625
     assert result.latency >= 0
 
 
@@ -79,6 +79,9 @@ def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
         """
     # Test Model
 
+    ## Installation
+    pip install transformers
+
     ## Usage
     Detailed usage instructions...
 
@@ -87,6 +90,9 @@ def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
 
     ## Examples
     Multiple examples with code...
+
+    ## Training
+    How to fine-tune this model...
 
     ```python
     from transformers import AutoModel
@@ -101,5 +107,5 @@ def test_compute_comprehensive_readme(ramp_up_metric, model_context, config):
 
     result = ramp_up_metric.compute(model_context, config)
 
-    assert result.score > 0.7  # Should get high score
+    assert result.score >= 0.8  # Should get high score (0.85 max)
     assert result.latency >= 0

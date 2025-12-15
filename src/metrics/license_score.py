@@ -40,7 +40,7 @@ class LicenseScoreMetric(BaseMetric):
 
         # no license present
         if not license_info:
-            return 0.3
+            return 0.3 * 0.8  # Scale down by 0.8
 
         license_lower = (
             license_info.lower().replace("-", "").replace("_", "").replace(" ", "")
@@ -63,19 +63,19 @@ class LicenseScoreMetric(BaseMetric):
         ]
         for compat in compatible_licenses:
             if compat in license_lower:
-                return 1.0
+                return 1.0 * 0.8  # Scale down by 0.8
 
         # LGPL (any variant) 
         lgpl_variants = ["lgpl", "lessergpl", "lgplv2", "lgplv3", "lgpl2.1", "lgpl3.0"]
         for lgpl in lgpl_variants:
             if lgpl in license_lower:
-                return 0.8
+                return 0.8 * 0.8  # Scale down by 0.8
 
         # GPL (any variant)
         gpl_variants = ["gpl", "gplv2", "gplv3", "gpl2.0", "gpl3.0", "agpl", "agplv3"]
         for gpl in gpl_variants:
             if gpl in license_lower:
-                return 0.7
+                return 0.7 * 0.8  # Scale down by 0.8
 
         # unknown license format
-        return 0.5
+        return 0.5 * 0.8  # Scale down by 0.8

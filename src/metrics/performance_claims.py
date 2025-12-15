@@ -100,20 +100,20 @@ class PerformanceClaimsMetric(BaseMetric):
         # scoring logic
         # multiple benchmarks + citations - 0.7-1.0
         if has_benchmarks and has_paper_ref and has_detailed_results:
-            return 0.85
+            return 0.85 * 0.8  # Scale down by 0.8
 
         # benchmark + paper reference - 0.6-1.0
         elif has_benchmarks and has_paper_ref:
-            return 0.75
+            return 0.75 * 0.8  # Scale down by 0.8
 
         # reproducible steps + benchmarks - 1.0
         elif has_reproducible and has_benchmarks:
-            return 1.0
+            return 1.0 * 0.8  # Scale down by 0.8
 
         # just benchmark scores - 0.3-0.6 (vague claims)
         elif has_benchmarks:
-            return 0.5
+            return 0.5 * 0.8  # Scale down by 0.8
 
         # no performance data - 0.0-0.2
         else:
-            return 0.1  # default
+            return 0.1 * 0.8  # Scale down by 0.8

@@ -96,8 +96,8 @@ class DatasetAndCodeScoreMetric(BaseMetric):
 
         # specification scoring rules
         if has_dataset_link and has_example_code:
-            return 1.0  # both present
+            return 1.0 * 0.8  # both present, scaled down by 0.8
         elif has_dataset_link or has_example_code:
-            return 0.5  # one present
+            return 0.5 * 0.8  # one present, scaled down by 0.8
         else:
-            return 0.1  # neither present
+            return 0.1 * 0.8  # neither present, scaled down by 0.8

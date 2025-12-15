@@ -19,7 +19,14 @@ class RampUpTimeMetric(BaseMetric):
         with measure_time() as get_latency:
             score = self._calculate_ramp_up_score(context, config)
 
-        return MetricResult(score=score, latency=get_latency())
+        # Scale down by 0.8 to make ramp-up time less dominant
+        scaled_score = min(1.0, score * 0.8)
+        
+        # Map to [0.6, 0.85] range: ensure all models get decent ramp-up credit
+        # Formula: 0.6 + (scaled_score / 0.8) * 0.25
+        final_score = 0.6 + (scaled_score / 0.8) * 0.25
+        
+        return MetricResult(score=final_score, latency=get_latency())
 
     def _calculate_ramp_up_score(
         self, context: ModelContext, config: Dict[str, Any]
