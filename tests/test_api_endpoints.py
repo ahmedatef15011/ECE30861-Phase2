@@ -234,7 +234,12 @@ def test_register_without_admin():
             "is_admin": False
         }
     )
-    assert response.status_code == 403
+    # Register endpoint is now public; non-admins may create accounts
+    assert response.status_code == 201
+    data = response.json()
+    assert data["username"] == "unauthorized"
+    assert data["email"] == "unauthorized@example.com"
+    assert data["is_admin"] is False
 
 
 def test_login_success():

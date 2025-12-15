@@ -3,6 +3,28 @@ import os
 import sys
 
 
+class TransientFileHandler(logging.Handler):
+    """A simple file logging handler that opens the target file for each emit
+    and closes it immediately afterwards. This avoids holding a file lock on
+    Windows which interferes with tests that create and delete temporary files.
+    """
+    def __init__(self, filename, mode="a", encoding=None):
+        super().__init__()
+        self.filename = filename
+        self.mode = mode
+        self.encoding = encoding
+        self.terminator = "\n"
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            # Open, write, and close on each emit so the file is not held open.
+            with open(self.filename, self.mode, encoding=self.encoding) as f:
+                f.write(msg + self.terminator)
+        except Exception:
+            self.handleError(record)
+
+
 def setup_logging() -> logging.Logger:
     # set up logging based on environment variables
     logger = logging.getLogger("src")
@@ -65,7 +87,10 @@ def setup_logging() -> logging.Logger:
 
     # set up file handler if LOG_FILE is specified
     if log_file:
-        file_handler = logging.FileHandler(log_file)
+        # Use a transient file handler that doesn't keep the file open between
+        # emits. This makes it safe for other processes (and tests) to delete
+        # the log file on Windows.
+        file_handler = TransientFileHandler(log_file)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     else:

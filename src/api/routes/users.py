@@ -10,7 +10,7 @@ from src.api.schemas import (
     UserResponse,
     TokenResponse,
 )
-from src.api.dependencies import get_db, get_current_user, get_current_admin_user
+from src.api.dependencies import get_db, get_current_user
 from src.database import crud
 from src.database.models import User
 from src.auth.password_hash import hash_password, verify_password
@@ -25,18 +25,17 @@ router = APIRouter()
 def register_user(
     user_data: UserRegister,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin_user)  # Only admins can register new users
 ):
     """
-    Register a new user (admin only).
-    
+    Register a new user (open registration).
+
     Args:
         user_data: User registration data
         db: Database session
-        
+
     Returns:
         Created user object
-        
+
     Raises:
         HTTPException: If username already exists
     """
