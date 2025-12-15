@@ -12,12 +12,8 @@ Tests verify:
 
 import json
 import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-
-import json
-import pytest
+import subprocess
+import shutil
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -28,6 +24,17 @@ from src.utils import (
     execute_access_control_program,
     validate_sensitive_model_access,
     execute_with_context
+)
+
+# Check if Node.js is available
+def is_nodejs_available():
+    """Check if Node.js is installed and accessible."""
+    return shutil.which("node") is not None
+
+# Skip decorator for tests requiring Node.js
+requires_nodejs = pytest.mark.skipif(
+    not is_nodejs_available(),
+    reason="Node.js is not installed or not in PATH"
 )
 
 
@@ -47,6 +54,7 @@ def db_session(monkeypatch):
 class TestJavaScriptExecution:
     """Test JavaScript execution utility functions."""
 
+    @requires_nodejs
     def test_execute_access_control_program_allowed(self):
         """Test execution of script that allows access (exit code 0)."""
         code = "process.exit(0);"
@@ -56,6 +64,7 @@ class TestJavaScriptExecution:
         assert exit_code == 0
         assert error_msg is None or error_msg == ""
 
+    @requires_nodejs
     def test_execute_access_control_program_denied(self):
         """Test execution of script that denies access (non-zero exit code)."""
         code = "process.exit(1);"
@@ -64,6 +73,7 @@ class TestJavaScriptExecution:
         assert access_granted is False
         assert exit_code == 1
 
+    @requires_nodejs
     def test_execute_access_control_program_timeout(self):
         """Test execution with timeout protection."""
         # Infinite loop should timeout
@@ -73,6 +83,7 @@ class TestJavaScriptExecution:
         assert access_granted is False
         # Timeout should result in non-zero exit code
 
+    @requires_nodejs
     def test_execute_access_control_program_syntax_error(self):
         """Test execution of syntactically invalid JavaScript."""
         code = "this is not valid javascript {{{{"
@@ -83,6 +94,7 @@ class TestJavaScriptExecution:
         # Error message should be present when there's a syntax error
         assert error_msg is not None and len(error_msg) > 0
 
+    @requires_nodejs
     def test_validate_sensitive_model_access_allowed(self):
         """Test validation with context variables - allow case."""
         # Script checks if MODEL_NAME is defined
@@ -101,6 +113,7 @@ class TestJavaScriptExecution:
         assert access_granted is True
         assert exit_code == 0
 
+    @requires_nodejs
     def test_validate_sensitive_model_access_denied(self):
         """Test validation with context variables - deny case."""
         # Script checks if MODEL_NAME is defined
@@ -119,6 +132,7 @@ class TestJavaScriptExecution:
         assert access_granted is False
         assert exit_code == 1
 
+    @requires_nodejs
     def test_validate_sensitive_model_access_with_user_id(self):
         """Test validation with USER_ID context variable."""
         # Script checks if USER_ID is defined and matches
@@ -137,6 +151,7 @@ class TestJavaScriptExecution:
         assert access_granted is True
         assert exit_code == 0
 
+    @requires_nodejs
     def test_execute_with_context_basic(self):
         """Test generic context variable injection."""
         code = """
@@ -151,6 +166,7 @@ class TestJavaScriptExecution:
         assert access_granted is True
         assert exit_code == 0
 
+    @requires_nodejs
     def test_execute_with_context_multiple_vars(self):
         """Test multiple context variables."""
         code = """
@@ -175,6 +191,7 @@ class TestJavaScriptExecution:
         assert access_granted is True
         assert exit_code == 0
 
+    @requires_nodejs
     def test_execute_with_context_json_values(self):
         """Test context with complex JSON values."""
         code = """
@@ -272,6 +289,7 @@ class TestDownloadWithAccessControl:
 class TestAccessControlScriptValidation:
     """Test JavaScript validation during upload."""
 
+    @requires_nodejs
     def test_validate_syntax_error_detection(self):
         """Test that syntax errors are caught."""
         code = "this { is {{{{ not valid"
@@ -281,6 +299,7 @@ class TestAccessControlScriptValidation:
         assert error_msg is not None
         assert "syntax" in error_msg.lower() or "error" in error_msg.lower()
 
+    @requires_nodejs
     def test_validate_runtime_error_detection(self):
         """Test that runtime errors are caught."""
         code = "throw new Error('Runtime error');"
@@ -288,6 +307,7 @@ class TestAccessControlScriptValidation:
         
         assert access_granted is False
 
+    @requires_nodejs
     def test_validate_successful_script(self):
         """Test that valid scripts pass validation."""
         code = """
