@@ -902,8 +902,7 @@ def create_app() -> FastAPI:
                 )
             else:
                 # Generate predictable S3 key for existing artifact
-                artifact_name = existing.name
-                s3_key = f"{artifact_type}s/{existing.id}/{artifact_name}.tar.gz"
+                s3_key = f"{artifact_type}/{existing.id}/{existing.id}.tar.gz"
                 download_url = (
                     f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
                 )
@@ -1220,7 +1219,7 @@ def create_app() -> FastAPI:
         sqs_queue_url = os.getenv("SQS_QUEUE_URL")
         
         # Generate predictable S3 download URL (before upload completes)
-        s3_key_prefix = f"{artifact_type}s/{package.id}"
+        s3_key_prefix = f"{artifact_type}/{package.id}"
         s3_download_url = (
             f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/"
             f"{s3_key_prefix}/"
@@ -1942,7 +1941,7 @@ def create_app() -> FastAPI:
             )
         else:
             # Generate predictable S3 key
-            s3_key = f"{artifact_type}s/{id}/{package.name}.tar.gz"
+            s3_key = f"{artifact_type}/{id}/{id}.tar.gz"
             download_url = (
                 f"https://{s3_bucket}.s3.{s3_region}.amazonaws.com/{s3_key}"
             )

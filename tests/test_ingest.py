@@ -67,7 +67,7 @@ class TestIngestValidator:
         assert len(failing) == 0
 
     def test_quality_gate_some_fail(self, validator):
-        """Test quality gate fails when net_score < 0.2."""
+        """Test quality gate fails when net_score < 0.5."""
         audit_result = AuditResult(
             name="test/model",
             category="MODEL",
@@ -392,9 +392,9 @@ class TestIngestQualityGateMetrics:
 
     def test_quality_gate_threshold_defined(self):
         """Test that quality gate threshold is properly defined."""
-        assert INGEST_NET_SCORE_THRESHOLD == 0.2
+        assert INGEST_NET_SCORE_THRESHOLD == 0.5
 
     def test_quality_gate_net_score_only(self):
         """Test that quality gate only checks net_score."""
         # Verify the threshold is for net score only
-        assert INGEST_NET_SCORE_THRESHOLD == 0.2
+        assert INGEST_NET_SCORE_THRESHOLD == 0.5
