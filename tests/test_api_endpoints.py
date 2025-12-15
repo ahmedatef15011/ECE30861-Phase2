@@ -187,7 +187,7 @@ def test_register_user():
         }
     )
     assert response.status_code == 201
-    data = response.json()
+    data = response.json()["user"]
     assert data["username"] == "newuser"
     assert data["email"] == "newuser@example.com"
     assert data["is_admin"] is False
@@ -236,7 +236,7 @@ def test_register_without_admin():
     )
     # Register endpoint is now public; non-admins may create accounts
     assert response.status_code == 201
-    data = response.json()
+    data = response.json()["user"]
     assert data["username"] == "unauthorized"
     assert data["email"] == "unauthorized@example.com"
     assert data["is_admin"] is False
