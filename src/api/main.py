@@ -1403,6 +1403,9 @@ def create_app() -> FastAPI:
                 parent_models = lineage_metadata.get(
                     "parent_models", []
                 )
+                
+                # Build list of potential parents with their package IDs
+                potential_parents = []
                 for parent_info in parent_models:
                     parent_id_str = parent_info.get("id")
                     relationship = parent_info.get(
@@ -1421,20 +1424,49 @@ def create_app() -> FastAPI:
                     ).all()
                     
                     if parent_packages:
-                        # Use first match
                         parent_pkg = parent_packages[0]
-                        
-                        # Create lineage relationship
-                        crud.create_lineage(
-                            db,
-                            parent_package_id=parent_pkg.id,
-                            child_package_id=package.id,
-                            relationship_type=relationship
-                        )
-                        logger.info(
-                            f"   ✓ Linked parent: {parent_name} "
-                            f"({relationship})"
-                        )
+                        potential_parents.append({
+                            "pkg": parent_pkg,
+                            "name": parent_name,
+                            "relationship": relationship
+                        })
+                
+                # Filter out transitive parents
+                # If parent A has parent B, and both A and B are in the list,
+                # remove B (keep only the direct parent A)
+                filtered_parents = []
+                for p1 in potential_parents:
+                    is_transitive = False
+                    # Check if there's another parent that itself has p1 as parent
+                    for p2 in potential_parents:
+                        if p1["pkg"].id == p2["pkg"].id:
+                            continue
+                        # Check if p2 has p1 as a parent (transitively)
+                        p2_parents = crud.get_package_parents(db, p2["pkg"].id)
+                        p2_parent_ids = {pl.parent_package_id for pl in p2_parents}
+                        if p1["pkg"].id in p2_parent_ids:
+                            is_transitive = True
+                            logger.info(
+                                f"   ⊘ Skipping transitive parent: {p1['name']} "
+                                f"(already connected through {p2['name']})"
+                            )
+                            break
+                    
+                    if not is_transitive:
+                        filtered_parents.append(p1)
+                
+                # Create lineage relationships for filtered parents only
+                for parent_data in filtered_parents:
+                    crud.create_lineage(
+                        db,
+                        parent_package_id=parent_data["pkg"].id,
+                        child_package_id=package.id,
+                        relationship_type=parent_data["relationship"]
+                    )
+                    logger.info(
+                        f"   ✓ Linked parent: {parent_data['name']} "
+                        f"({parent_data['relationship']})"
+                    )
                 
                 logger.info(
                     f"✅ Lineage extracted: "
