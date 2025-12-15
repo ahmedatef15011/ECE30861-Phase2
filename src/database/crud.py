@@ -17,6 +17,9 @@ from .models import (
     SensitiveModuleHistory,
     MaliciousModelReport,
 )
+from ..logging_utils import get_logger
+
+logger = get_logger()
 
 
 # ============================================================================
@@ -387,8 +390,28 @@ def create_lineage(
     parent_package_id: int,
     child_package_id: int,
     relationship_type: str = "depends_on"
-) -> PackageLineage:
+) -> Optional[PackageLineage]:
     """Create a lineage relationship between packages."""
+    # Validate: Prevent self-references
+    if parent_package_id == child_package_id:
+        logger.warning(
+            f"Skipping self-reference lineage: package {parent_package_id} -> {child_package_id}"
+        )
+        return None
+    
+    # Validate: Check if lineage already exists
+    existing = db.query(PackageLineage).filter(
+        PackageLineage.parent_package_id == parent_package_id,
+        PackageLineage.child_package_id == child_package_id,
+        PackageLineage.relationship_type == relationship_type
+    ).first()
+    
+    if existing:
+        logger.info(
+            f"Lineage already exists: {parent_package_id} -> {child_package_id} ({relationship_type})"
+        )
+        return existing
+    
     lineage = PackageLineage(
         parent_package_id=parent_package_id,
         child_package_id=child_package_id,
