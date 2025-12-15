@@ -17,8 +17,8 @@ from .utils import measure_time
 logger = logging.getLogger(__name__)
 
 # Quality gate threshold for ingest
-# Net score must be >= 0.2 to pass
-INGEST_NET_SCORE_THRESHOLD = 0.2
+
+INGEST_NET_SCORE_THRESHOLD = 0.5
 
 
 class IngestValidator:
