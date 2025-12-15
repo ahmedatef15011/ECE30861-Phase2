@@ -21,7 +21,7 @@ from src.api.config import settings
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register_user(
     user_data: UserRegister,
     db: Session = Depends(get_db),
@@ -56,8 +56,28 @@ def register_user(
         hashed_password=hashed_password,
         is_admin=user_data.is_admin
     )
-    
-    return db_user
+    # Create access token for the newly registered user (same policy as login)
+    expires_delta = timedelta(hours=10)
+    access_token = create_access_token(
+        data={"sub": db_user.username},
+        expires_delta=expires_delta
+    )
+
+    # Persist token for usage tracking
+    from datetime import datetime
+    expires_at = datetime.utcnow() + expires_delta
+    crud.create_auth_token(
+        db=db,
+        user_id=db_user.id,
+        token=access_token,
+        expires_at=expires_at
+    )
+
+    return {
+        "access_token": f"bearer {access_token}",
+        "token_type": "bearer",
+        "user": db_user
+    }
 
 
 @router.post("/login", response_model=TokenResponse)
