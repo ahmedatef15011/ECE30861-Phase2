@@ -1,0 +1,1827 @@
+---
+openapi: 3.0.2
+info:
+  title: ECE 30861 - ML Model Registry API
+  version: 2.0.0
+  description: |-
+    API for ECE 30861 - A Trustworthy Model Registry for Machine Learning Models
+
+    This API provides a registry for ML models, datasets, and code artifacts with quality scoring, 
+    lineage tracking, and license compatibility checking.
+
+    All endpoints have BASELINE or NON-BASELINE listed. BASELINE endpoints are required for the core functionality.
+
+    An `artifact_id` is a unique identifier for each model/dataset/code entry.
+
+    Implemented Tracks:
+    - Access control track: Complete user authentication and authorization with JWT tokens
+
+  contact:
+    name: Team 20
+    email: team20@purdue.edu
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://vmqqvhwppq.us-east-1.awsapprunner.com/
+    description: AWS APP RUNNER
+
+paths:
+  /:
+    get:
+      summary: "Root endpoint"
+      description: |-
+        Root endpoint with API information and links to documentation.
+      operationId: Root
+      responses:
+        "200":
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: "ML Model Registry API"
+                  version:
+                    type: string
+                    example: "2.0.0"
+                  docs:
+                    type: string
+                    example: "/docs"
+                  health:
+                    type: string
+                    example: "/health"
+                  frontend:
+                    type: string
+                    example: "/frontend"
+
+  /health:
+    get:
+      summary: "Heartbeat check (BASELINE)"
+      description: |-
+        Lightweight liveness probe. Returns HTTP 200 when the registry API is reachable.
+        This is a public endpoint with no authentication required.
+      operationId: RegistryHealthHeartbeat
+      responses:
+        "200":
+          description: Service reachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /frontend:
+    get:
+      summary: "Frontend interface"
+      description: |-
+        Simple HTML frontend interface for the ML Model Registry.
+        Provides a basic HTML page for interacting with the API.
+      operationId: Frontend
+      responses:
+        "200":
+          description: HTML frontend page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /tracks:
+    get:
+      summary: "Get the list of tracks implemented (BASELINE)"
+      description: |-
+        Return the list of tracks the student plans to implement.
+        This endpoint is used by the autograder to verify implemented features.
+      operationId: GetTracks
+      responses:
+        "200":
+          description: Return the list of tracks implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plannedTracks:
+                    type: array
+                    description: "List of tracks implemented"
+                    items:
+                      type: string
+                      enum:
+                        - "Performance track"
+                        - "Access control track"
+                        - "High assurance track"
+                        - "Other Security track"
+              example:
+                plannedTracks:
+                  - "Access control track"
+        "500":
+          description: The system encountered an error while retrieving the track information.
+
+  /authenticate:
+    put:
+      summary: "Authenticate user and get access token (NON-BASELINE)"
+      description: |-
+        Authenticate user and return JWT token.
+        The obtained token should be provided to the other endpoints via the "X-Authorization" header.
+      operationId: CreateAuthToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticationRequest"
+            examples:
+              ExampleRequest:
+                value:
+                  user:
+                    name: ece30861defaultadminuser
+                    is_admin: true
+                  secret:
+                    password: correcthorsebatterystaple123(!__+@**(A'"`;DROP TABLE artifacts;
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationToken"
+              examples:
+                ExampleResponse:
+                  value: '"bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."'
+          description: Return an AuthenticationToken.
+        "400":
+          description: There is missing field(s) in the AuthenticationRequest or it is formed improperly.
+        "401":
+          description: The user or password is invalid.
+
+  /reset:
+    delete:
+      summary: "Reset the registry (BASELINE)"
+      description: |-
+        Reset the registry to a system default state.
+        Requires admin authentication.
+        WARNING: This deletes all data including packages, scores, and users
+        except for the default admin user which is recreated.
+      operationId: RegistryReset
+      responses:
+        "200":
+          description: Registry is reset.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Registry is reset"
+        "401":
+          description: You do not have permission to reset the registry.
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+    parameters:
+      - name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifacts:
+    post:
+      summary: "Get artifacts from the registry (BASELINE)"
+      description: |-
+        Get any artifacts fitting the query.
+        Search for artifacts satisfying the indicated query.
+
+        If you want to enumerate all artifacts, provide an array with a single artifact_query whose name is "*".
+
+        The response is paginated; the response header includes the offset to use in the next query.
+      operationId: ArtifactsList
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/ArtifactQuery"
+        required: true
+      parameters:
+        - name: offset
+          description: "Provide this for pagination. If not provided, returns the first page of results."
+          schema:
+            $ref: "#/components/schemas/EnumerateOffset"
+          in: query
+          required: false
+      responses:
+        "200":
+          headers:
+            offset:
+              schema:
+                $ref: "#/components/schemas/EnumerateOffset"
+              examples:
+                ExampleRequest:
+                  value: "3"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArtifactMetadata"
+              examples:
+                ExampleResponse:
+                  value:
+                    - name: bert-base-uncased
+                      id: 1
+                      type: model
+                    - name: bookcorpus
+                      id: 2
+                      type: dataset
+          description: List of artifacts
+        "400":
+          description: "There is missing field(s) in the artifact_query or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "413":
+          description: Too many artifacts returned.
+    parameters:
+      - name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifact/{artifact_type}:
+    post:
+      summary: "Register a new artifact (BASELINE)"
+      description: |-
+        Register a new artifact by providing a downloadable source URL.
+        Artifacts may share a name with existing entries.
+        Models go through quality gate validation.
+        Datasets and code artifacts are auto-approved.
+      operationId: ArtifactCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtifactData"
+            examples:
+              ExampleArtifactData:
+                value:
+                  url: https://huggingface.co/google-bert/bert-base-uncased
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+              examples:
+                ExampleArtifactDataResponse:
+                  value:
+                    metadata:
+                      name: bert-base-uncased
+                      id: 1
+                      type: model
+                    data:
+                      url: https://huggingface.co/google-bert/bert-base-uncased
+                      download_url: https://s3.amazonaws.com/bucket/models/1/bert-base-uncased.tar.gz
+          description: Success. Check the id in the returned metadata for the official ID.
+        "400":
+          description: There is missing field(s) in the artifact_data or it is formed improperly (must include a single url).
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "409":
+          description: Artifact exists already.
+        "424":
+          description: Artifact is not registered due to the disqualified rating.
+    parameters:
+      - name: artifact_type
+        description: Type of artifact being ingested.
+        schema:
+          $ref: "#/components/schemas/ArtifactType"
+        in: path
+        required: true
+      - name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifacts/{artifact_type}/{id}:
+    get:
+      summary: "Retrieve artifact by type and ID (BASELINE)"
+      description: Return this artifact with metadata and data.
+      operationId: ArtifactRetrieve
+      parameters:
+        - name: artifact_type
+          description: Type of artifact to fetch
+          schema:
+            $ref: "#/components/schemas/ArtifactType"
+          in: path
+          required: true
+        - name: id
+          description: ID of artifact to fetch
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+              examples:
+                ExampleResponse:
+                  value:
+                    metadata:
+                      name: bert-base-uncased
+                      id: 1
+                      type: model
+                    data:
+                      url: https://huggingface.co/google-bert/bert-base-uncased
+                      download_url: https://s3.amazonaws.com/bucket/models/1/bert-base-uncased.tar.gz
+          description: Return the artifact. url is required.
+        "400":
+          description: "There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+    put:
+      summary: "Update artifact content (BASELINE)"
+      description: |-
+        The name and id must match.
+        The artifact source (from artifact_data) will replace the previous contents.
+      operationId: ArtifactUpdate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Artifact"
+        required: true
+      parameters:
+        - name: artifact_type
+          description: Type of artifact to update
+          schema:
+            $ref: "#/components/schemas/ArtifactType"
+          in: path
+          required: true
+        - name: id
+          description: artifact id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+      responses:
+        "200":
+          description: Artifact is updated.
+        "400":
+          description: "There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+    delete:
+      summary: "Delete this artifact (BASELINE)"
+      description: Delete only the artifact that matches "id".
+      operationId: ArtifactDelete
+      parameters:
+        - name: artifact_type
+          description: Type of artifact to delete
+          schema:
+            $ref: "#/components/schemas/ArtifactType"
+          in: path
+          required: true
+        - name: id
+          description: artifact id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+      responses:
+        "200":
+          description: Artifact is deleted.
+        "400":
+          description: "There is missing field(s) in the artifact_type or artifact_id or invalid"
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+    parameters:
+      - examples:
+          ExampleID:
+            value: model
+        name: artifact_type
+        description: Artifact type
+        schema:
+          $ref: "#/components/schemas/ArtifactType"
+        in: path
+        required: true
+      - examples:
+          ExampleID:
+            value: "1"
+        name: id
+        description: artifact id
+        schema:
+          $ref: "#/components/schemas/ArtifactID"
+        in: path
+        required: true
+      - examples:
+          ExampleToken:
+            value: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifact/model/{id}/rate:
+    get:
+      summary: "Get ratings for this model artifact (BASELINE)"
+      description: |-
+        Returns ModelRating with all quality metrics.
+        All field names follow snake_case convention.
+      operationId: ModelArtifactRate
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelRating"
+          description: Return the rating. Only use this if each metric was computed successfully.
+        "400":
+          description: "There is missing field(s) in the artifact_id or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+        "500":
+          description: The artifact rating system encountered an error while computing at least one metric.
+    parameters:
+      - name: id
+        schema:
+          $ref: "#/components/schemas/ArtifactID"
+        in: path
+        required: true
+      - name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifact/{artifact_type}/{id}/cost:
+    get:
+      summary: "Get the cost of an artifact (BASELINE)"
+      description: |-
+        Get the cost of an artifact measured in KB based on content size.
+        Formula: standalone_cost = max(1.0, content_size_bytes / 1024.0)
+        When dependency=true, total_cost includes dependencies.
+      operationId: ArtifactCost
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactCost"
+              examples:
+                ExampleWithoutDependency:
+                  value:
+                    "1":
+                      standalone_cost: 412.5
+                      total_cost: 412.5
+                ExampleWithDependency:
+                  value:
+                    "1":
+                      standalone_cost: 412.5
+                      total_cost: 825.0
+          description: Return the total cost of the artifact, and its dependencies
+        "400":
+          description: "There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+        "500":
+          description: The artifact cost calculator encountered an error.
+    parameters:
+      - name: artifact_type
+        schema:
+          $ref: "#/components/schemas/ArtifactType"
+        in: path
+        required: true
+      - name: id
+        schema:
+          $ref: "#/components/schemas/ArtifactID"
+        in: path
+        required: true
+      - name: dependency
+        schema:
+          type: boolean
+          default: false
+        in: query
+      - name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifact/model/{id}/lineage:
+    get:
+      summary: "Retrieve the lineage graph for this artifact (BASELINE)"
+      description: |-
+        Lineage graph extracted from structured metadata.
+        Shows relationships between models, datasets, and code.
+      operationId: ArtifactLineageGet
+      parameters:
+        - name: id
+          description: artifact id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+        - name: X-Authorization
+          description: ""
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactLineageGraph"
+              examples:
+                ExampleLineageGraph:
+                  value:
+                    nodes:
+                      - artifact_id: "1"
+                        name: bert-fine-tuned
+                        source: database
+                      - artifact_id: "2"
+                        name: bert-base-uncased
+                        source: database
+                    edges:
+                      - from_node_artifact_id: "2"
+                        to_node_artifact_id: "1"
+                        relationship: base_model
+          description: Lineage graph extracted from structured metadata.
+        "400":
+          description: "The lineage graph cannot be computed because the artifact metadata is missing or malformed."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+
+  /artifact/model/{id}/license-check:
+    post:
+      summary: "Assess license compatibility (BASELINE)"
+      description: |-
+        Check if the model's license is compatible with the intended usage
+        given the GitHub project's license.
+      operationId: ArtifactLicenseCheck
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimpleLicenseCheckRequest"
+            examples:
+              ExampleSimpleLicenseCheckRequest:
+                value:
+                  github_url: https://github.com/google-research/bert
+        required: true
+      parameters:
+        - name: id
+          description: artifact id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+        - name: X-Authorization
+          description: ""
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: boolean
+              examples:
+                ExampleSimpleLicenseCheckResult:
+                  value: true
+          description: License compatibility analysis produced successfully.
+        "400":
+          description: "The license check request is malformed or references an unsupported usage context."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: The artifact or GitHub project could not be found.
+        "502":
+          description: External license information could not be retrieved.
+
+  /artifact/byName/{name}:
+    get:
+      summary: "List artifact metadata for this name (NON-BASELINE)"
+      description: Return metadata for each artifact matching this name.
+      operationId: ArtifactByNameGet
+      parameters:
+        - name: name
+          schema:
+            $ref: "#/components/schemas/ArtifactName"
+          in: path
+          required: true
+        - name: X-Authorization
+          description: ""
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArtifactMetadata"
+              examples:
+                ExampleResponse:
+                  value:
+                    - name: bert-base-uncased
+                      id: 1
+                      type: model
+                    - name: bert-base-uncased
+                      id: 3
+                      type: model
+          description: Return artifact metadata entries that match the provided name.
+        "400":
+          description: "There is missing field(s) in the artifact_name or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: No such artifact.
+
+  /artifact/byRegEx:
+    post:
+      summary: "Get artifacts matching regular expression (BASELINE)"
+      description: |-
+        Search for artifacts using regular expression over artifact names and READMEs.
+        Protected against ReDoS attacks via pattern validation and timeout.
+      operationId: ArtifactByRegExGet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtifactRegEx"
+            examples:
+              ExampleRegEx:
+                value:
+                  regex: .*?(bert|gpt).*
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArtifactMetadata"
+              examples:
+                ExampleResponse:
+                  value:
+                    - name: bert-base-uncased
+                      id: 1
+                      type: model
+                    - name: gpt2
+                      id: 2
+                      type: model
+          description: Return a list of artifacts.
+        "400":
+          description: There is missing field(s) in the artifact_regex or it is formed improperly, or is invalid
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: No artifact found under this regex.
+    parameters:
+      - name: X-Authorization
+        description: ""
+        schema:
+          $ref: "#/components/schemas/AuthenticationToken"
+        in: header
+        required: true
+
+  /artifact/{artifact_type}/{id}/audit:
+    get:
+      summary: "Retrieve audit entries for this artifact (NON-BASELINE)"
+      description: |-
+        Returns historical information about the artifact including
+        what changed, when, and by whom. Tracks CREATE, UPDATE,
+        DOWNLOAD, RATE, and AUDIT actions.
+      operationId: ArtifactAuditGet
+      parameters:
+        - name: artifact_type
+          description: Type of artifact to audit
+          schema:
+            $ref: "#/components/schemas/ArtifactType"
+          in: path
+          required: true
+        - name: id
+          description: artifact id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+        - name: X-Authorization
+          description: ""
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArtifactAuditEntry"
+              examples:
+                ExampleAuditTrail:
+                  value:
+                    - user:
+                        name: admin
+                        is_admin: true
+                      date: 2024-12-14T14:22:05Z
+                      artifact:
+                        name: bert-base-uncased
+                        id: 1
+                        type: model
+                      action: CREATE
+                    - user:
+                        name: admin
+                        is_admin: true
+                      date: 2024-12-14T14:24:18Z
+                      artifact:
+                        name: bert-base-uncased
+                        id: 1
+                        type: model
+                      action: DOWNLOAD
+          description: Return the audit trail for this artifact.
+        "400":
+          description: "There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid."
+        "403":
+          description: Authentication failed due to invalid or missing AuthenticationToken.
+        "404":
+          description: Artifact does not exist.
+
+  /download/{artifact_type}/{id}:
+    get:
+      summary: "Download artifact (BASELINE)"
+      description: |-
+        Download artifact by redirecting to S3 or original source.
+        Records download in audit trail.
+        For sensitive models: Executes access control JavaScript program.
+      operationId: ArtifactDownload
+      parameters:
+        - name: artifact_type
+          description: Type of artifact to download
+          schema:
+            $ref: "#/components/schemas/ArtifactType"
+          in: path
+          required: true
+        - name: id
+          description: artifact id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+        - name: X-Authorization
+          description: ""
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "302":
+          description: Redirect to artifact download URL.
+        "400":
+          description: Invalid artifact type or ID.
+        "403":
+          description: Access denied by model access control policy.
+        "404":
+          description: Artifact does not exist.
+
+  /artifact/model/{id}/access-control:
+    get:
+      summary: "Get access control script for model (NON-BASELINE)"
+      description: |-
+        Retrieve the access control JavaScript program for a model.
+        Only the model owner or admins can view the script.
+      operationId: GetAccessControlScript
+      parameters:
+        - name: id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+        - name: X-Authorization
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          description: Access control script and metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model_id:
+                    type: integer
+                  model_name:
+                    type: string
+                  is_sensitive:
+                    type: boolean
+                  javascript_code:
+                    type: string
+                  has_access_control:
+                    type: boolean
+        "403":
+          description: You do not have permission to view this model's access control script.
+        "404":
+          description: Model not found.
+    put:
+      summary: "Set access control script for model (NON-BASELINE)"
+      description: |-
+        Upload or update access control JavaScript program for a sensitive model.
+        The JavaScript program must call process.exit(0) for access allowed,
+        or process.exit(non-zero) for access denied.
+      operationId: SetAccessControlScript
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                javascript_code:
+                  type: string
+                  description: JavaScript program for access control
+              required:
+                - javascript_code
+        required: true
+      parameters:
+        - name: id
+          schema:
+            $ref: "#/components/schemas/ArtifactID"
+          in: path
+          required: true
+        - name: X-Authorization
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          description: Access control script updated successfully.
+        "400":
+          description: JavaScript validation failed or syntax error.
+        "403":
+          description: You do not have permission to update this model.
+        "404":
+          description: Model not found.
+
+  /api/v1/user/register:
+    post:
+      summary: "Register a new user (NON-BASELINE)"
+      description: Register a new user with open registration.
+      operationId: RegisterUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRegister"
+        required: true
+      responses:
+        "201":
+          description: User created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Username already exists.
+
+  /api/v1/user/login:
+    post:
+      summary: "Authenticate user and return JWT token (NON-BASELINE)"
+      description: Authenticate user and return JWT token with user information.
+      operationId: Login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserLogin"
+        required: true
+      responses:
+        "200":
+          description: Login successful.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid credentials.
+
+  /api/v1/user/me:
+    get:
+      summary: "Get current user information (NON-BASELINE)"
+      description: Get current authenticated user information.
+      operationId: GetCurrentUser
+      parameters:
+        - name: X-Authorization
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          description: User information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Not authenticated.
+
+  /api/v1/user/{username}:
+    delete:
+      summary: "Delete a user account (NON-BASELINE)"
+      description: |-
+        Delete a user account.
+        Regular users can only delete their own account.
+        Admins can delete any account.
+      operationId: DeleteUser
+      parameters:
+        - name: username
+          schema:
+            type: string
+          in: path
+          required: true
+        - name: X-Authorization
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          description: User deleted successfully.
+        "403":
+          description: Not authorized to delete this user.
+        "404":
+          description: User not found.
+
+  /api/v1/security/sensitive/history/{package_id}:
+    get:
+      summary: "Get sensitive module history (NON-BASELINE)"
+      description: |-
+        Get historical information about a sensitive module.
+        Returns what changed, when, and by whom.
+      operationId: GetSensitiveModuleHistory
+      parameters:
+        - name: package_id
+          schema:
+            type: integer
+          in: path
+          required: true
+        - name: limit
+          schema:
+            type: integer
+            default: 100
+          in: query
+        - name: X-Authorization
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "200":
+          description: Sensitive module history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensitiveHistoryResponse"
+        "404":
+          description: Package not found.
+
+  /api/v1/security/malicious:
+    get:
+      summary: "Get suspected malicious models (NON-BASELINE)"
+      description: |-
+        Get a list of models suspected to be malicious including their 
+        detection method, severity, and current status.
+      operationId: GetSuspectedMaliciousModels
+      parameters:
+        - name: severity
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+          in: query
+        - name: status
+          schema:
+            type: string
+            enum: [pending, confirmed, dismissed, under_review]
+          in: query
+        - name: limit
+          schema:
+            type: integer
+            default: 100
+          in: query
+      responses:
+        "200":
+          description: List of suspected malicious models.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaliciousModelsListResponse"
+
+  /api/v1/security/malicious/report:
+    post:
+      summary: "Report a potentially malicious model (NON-BASELINE)"
+      description: Submit a report about a model suspected to be malicious.
+      operationId: ReportMaliciousModel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MaliciousReportRequest"
+        required: true
+      parameters:
+        - name: X-Authorization
+          schema:
+            $ref: "#/components/schemas/AuthenticationToken"
+          in: header
+          required: true
+      responses:
+        "201":
+          description: Report created successfully.
+        "400":
+          description: Invalid request.
+        "404":
+          description: Package not found.
+
+  /api/v1/llm/health:
+    get:
+      summary: "Check LLM health (NON-BASELINE)"
+      description: Check if AWS Bedrock LLM is available and working.
+      operationId: LLMHealthCheck
+      responses:
+        "200":
+          description: LLM health status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LLMHealthResponse"
+
+  /api/v1/llm/generate:
+    post:
+      summary: "Generate text using LLM (NON-BASELINE)"
+      description: Generate text using AWS Bedrock Claude model.
+      operationId: GenerateText
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRequest"
+        required: true
+      responses:
+        "200":
+          description: Generated text response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateResponse"
+        "503":
+          description: LLM service unavailable.
+
+  /api/v1/llm/analyze:
+    post:
+      summary: "Analyze code with LLM (NON-BASELINE)"
+      description: |-
+        Analyze code for reproducibility, quality, or security using LLM.
+      operationId: AnalyzeCode
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeCodeRequest"
+        required: true
+      responses:
+        "200":
+          description: Analysis results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeCodeResponse"
+
+  /api/v1/llm/summarize:
+    post:
+      summary: "Summarize README content (NON-BASELINE)"
+      description: Summarize and analyze a README/model card using LLM.
+      operationId: SummarizeReadme
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SummarizeRequest"
+        required: true
+      responses:
+        "200":
+          description: Summary and quality analysis.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummarizeResponse"
+
+components:
+  schemas:
+    Artifact:
+      description: Artifact envelope containing metadata and ingest details.
+      required:
+        - metadata
+        - data
+      type: object
+      properties:
+        metadata:
+          $ref: "#/components/schemas/ArtifactMetadata"
+        data:
+          $ref: "#/components/schemas/ArtifactData"
+
+    ArtifactData:
+      description: |-
+        Source location for ingesting an artifact.
+        Provide a single downloadable url pointing to a bundle that contains the artifact assets.
+      required:
+        - url
+      type: object
+      properties:
+        url:
+          description: Artifact source url used during ingest.
+          type: string
+          format: uri
+        name:
+          description: Optional expected artifact name.
+          type: string
+        download_url:
+          description: Direct download link served by your server for retrieving the stored artifact bundle. Present only in responses.
+          type: string
+          format: uri
+          readOnly: true
+      example:
+        url: https://huggingface.co/openai/whisper-tiny
+        download_url: https://s3.amazonaws.com/bucket/whisper-tiny
+
+    ArtifactType:
+      description: "Artifact category."
+      type: string
+      enum:
+        - model
+        - dataset
+        - code
+
+    ArtifactID:
+      description: "Unique identifier for use with artifact endpoints."
+      example: "1"
+      type: string
+      pattern: '^[a-zA-Z0-9\-]+$'
+
+    ArtifactName:
+      description: |-
+        Name of an artifact.
+        - Names should only use typical "keyboard" characters.
+        - The name "*" is reserved for listing all artifacts.
+      type: string
+
+    ArtifactMetadata:
+      description: |-
+        The `name` is provided when uploading an artifact.
+        The `id` is used as an internal identifier for interacting with existing artifacts.
+      required:
+        - name
+        - id
+        - type
+      type: object
+      properties:
+        name:
+          $ref: "#/components/schemas/ArtifactName"
+        id:
+          type: integer
+          description: Unique artifact ID (integer)
+        type:
+          $ref: "#/components/schemas/ArtifactType"
+
+    ArtifactQuery:
+      description: "Query for artifacts."
+      required:
+        - name
+      type: object
+      properties:
+        name:
+          $ref: "#/components/schemas/ArtifactName"
+          description: ""
+        types:
+          description: Optional list of artifact types to filter results.
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactType"
+
+    ArtifactAuditEntry:
+      description: One entry in an artifact's audit history.
+      required:
+        - user
+        - date
+        - artifact
+        - action
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+          description: ""
+        date:
+          format: date-time
+          description: Date of activity using ISO-8601 Datetime standard in UTC format.
+          type: string
+          example: 2024-12-14T23:11:15Z
+        artifact:
+          $ref: "#/components/schemas/ArtifactMetadata"
+          description: ""
+        action:
+          description: ""
+          enum:
+            - CREATE
+            - UPDATE
+            - DOWNLOAD
+            - RATE
+            - AUDIT
+          type: string
+
+    ArtifactCost:
+      description: Artifact Cost aggregates the total download size (in KB) required for the artifact.
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          standalone_cost:
+            type: number
+            description: The standalone cost of this artifact excluding dependencies.
+          total_cost:
+            type: number
+            description: The total cost of the artifact including dependencies if requested.
+        required:
+          - standalone_cost
+          - total_cost
+
+    ArtifactRegEx:
+      description: "Regular expression query for artifact search."
+      required:
+        - regex
+      type: object
+      properties:
+        regex:
+          description: A regular expression over artifact names and READMEs used for searching.
+          type: string
+
+    ArtifactLineageNode:
+      description: A single node in an artifact lineage graph.
+      required:
+        - artifact_id
+        - name
+        - source
+      type: object
+      properties:
+        artifact_id:
+          description: Unique identifier for the node.
+          $ref: "#/components/schemas/ArtifactID"
+        name:
+          description: Human-readable label for the node.
+          type: string
+          example: bert-base-uncased
+        source:
+          description: Provenance for how the node was discovered.
+          type: string
+          example: database
+
+    ArtifactLineageEdge:
+      description: Directed relationship between two lineage nodes.
+      required:
+        - from_node_artifact_id
+        - to_node_artifact_id
+        - relationship
+      type: object
+      properties:
+        from_node_artifact_id:
+          description: Identifier of the upstream node.
+          $ref: "#/components/schemas/ArtifactID"
+        to_node_artifact_id:
+          description: Identifier of the downstream node.
+          $ref: "#/components/schemas/ArtifactID"
+        relationship:
+          description: Qualitative description of the edge.
+          type: string
+          example: base_model
+
+    ArtifactLineageGraph:
+      description: Complete lineage graph for an artifact.
+      required:
+        - nodes
+        - edges
+      type: object
+      properties:
+        nodes:
+          description: Nodes participating in the lineage graph.
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactLineageNode"
+        edges:
+          description: Directed edges describing lineage relationships.
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactLineageEdge"
+
+    SimpleLicenseCheckRequest:
+      description: Request payload for artifact license compatibility analysis.
+      required:
+        - github_url
+      type: object
+      properties:
+        github_url:
+          description: GitHub repository url to evaluate.
+          type: string
+          format: uri
+          example: https://github.com/google-research/bert
+
+    User:
+      description: "User object."
+      required:
+        - name
+        - is_admin
+      type: object
+      properties:
+        name:
+          description: ""
+          type: string
+          example: admin
+        is_admin:
+          description: Is this user an admin?
+          type: boolean
+
+    UserRegister:
+      description: User registration data.
+      required:
+        - username
+        - password
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        is_admin:
+          type: boolean
+          default: false
+
+    UserLogin:
+      description: User login credentials.
+      required:
+        - username
+        - password
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    UserResponse:
+      description: User response object.
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        is_admin:
+          type: boolean
+
+    TokenResponse:
+      description: Token response with user info.
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserResponse"
+
+    UserAuthenticationInfo:
+      description: Authentication info for a user
+      required:
+        - password
+      type: object
+      properties:
+        password:
+          description: Password for a user.
+          type: string
+
+    ModelRating:
+      description: Model rating summary generated by the evaluation service.
+      required:
+        - name
+        - category
+        - net_score
+        - net_score_latency
+        - ramp_up_time
+        - ramp_up_time_latency
+        - bus_factor
+        - bus_factor_latency
+        - performance_claims
+        - performance_claims_latency
+        - license
+        - license_latency
+        - dataset_and_code_score
+        - dataset_and_code_score_latency
+        - dataset_quality
+        - dataset_quality_latency
+        - code_quality
+        - code_quality_latency
+        - reproducibility
+        - reproducibility_latency
+        - reviewedness
+        - reviewedness_latency
+        - tree_score
+        - tree_score_latency
+        - size_score
+        - size_score_latency
+      type: object
+      properties:
+        name:
+          description: Human-friendly label for the evaluated model.
+          type: string
+        category:
+          description: Model category assigned during evaluation.
+          type: string
+        net_score:
+          format: double
+          description: Overall score synthesizing all metrics.
+          type: number
+        net_score_latency:
+          format: double
+          description: Time (seconds) required to compute net_score.
+          type: number
+        ramp_up_time:
+          format: double
+          description: Ease-of-adoption rating for the model.
+          type: number
+        ramp_up_time_latency:
+          format: double
+          description: Time (seconds) required to compute ramp_up_time.
+          type: number
+        bus_factor:
+          format: double
+          description: Team redundancy score for the upstream project.
+          type: number
+        bus_factor_latency:
+          format: double
+          description: Time (seconds) required to compute bus_factor.
+          type: number
+        performance_claims:
+          format: double
+          description: Alignment between stated and observed performance.
+          type: number
+        performance_claims_latency:
+          format: double
+          description: Time (seconds) required to compute performance_claims.
+          type: number
+        license:
+          format: double
+          description: Licensing suitability score.
+          type: number
+        license_latency:
+          format: double
+          description: Time (seconds) required to compute license.
+          type: number
+        dataset_and_code_score:
+          format: double
+          description: Availability and quality of accompanying datasets and code.
+          type: number
+        dataset_and_code_score_latency:
+          format: double
+          description: Time (seconds) required to compute dataset_and_code_score.
+          type: number
+        dataset_quality:
+          format: double
+          description: Quality rating for associated datasets.
+          type: number
+        dataset_quality_latency:
+          format: double
+          description: Time (seconds) required to compute dataset_quality.
+          type: number
+        code_quality:
+          format: double
+          description: Quality rating for provided code artifacts.
+          type: number
+        code_quality_latency:
+          format: double
+          description: Time (seconds) required to compute code_quality.
+          type: number
+        reproducibility:
+          format: double
+          description: Likelihood that reported results can be reproduced.
+          type: number
+        reproducibility_latency:
+          format: double
+          description: Time (seconds) required to compute reproducibility.
+          type: number
+        reviewedness:
+          format: double
+          description: Measure of peer or community review coverage.
+          type: number
+        reviewedness_latency:
+          format: double
+          description: Time (seconds) required to compute reviewedness.
+          type: number
+        tree_score:
+          format: double
+          description: Supply-chain health score for model dependencies.
+          type: number
+        tree_score_latency:
+          format: double
+          description: Time (seconds) required to compute tree_score.
+          type: number
+        size_score:
+          description: Size suitability scores for common deployment targets.
+          type: object
+          required:
+            - raspberry_pi
+            - jetson_nano
+            - desktop_pc
+            - aws_server
+          properties:
+            raspberry_pi:
+              format: double
+              description: Size score for Raspberry Pi class devices.
+              type: number
+            jetson_nano:
+              format: double
+              description: Size score for Jetson Nano deployments.
+              type: number
+            desktop_pc:
+              format: double
+              description: Size score for desktop deployments.
+              type: number
+            aws_server:
+              format: double
+              description: Size score for cloud server deployments.
+              type: number
+        size_score_latency:
+          description: Time (seconds) required to compute size_score.
+          format: double
+          type: number
+
+    AuthenticationToken:
+      description: JWT token for authentication. Format is "bearer <token>".
+      type: string
+
+    AuthenticationRequest:
+      description: "Authentication request."
+      required:
+        - user
+        - secret
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+          description: ""
+        secret:
+          $ref: "#/components/schemas/UserAuthenticationInfo"
+          description: ""
+
+    EnumerateOffset:
+      description: Offset in pagination.
+      type: string
+      example: "1"
+
+    SensitiveHistoryResponse:
+      description: Response schema for sensitive module history list.
+      type: object
+      properties:
+        total:
+          type: integer
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              package_id:
+                type: integer
+              package_name:
+                type: string
+              user_id:
+                type: integer
+              username:
+                type: string
+              action:
+                type: string
+              field_changed:
+                type: string
+              old_value:
+                type: string
+              new_value:
+                type: string
+              change_summary:
+                type: string
+              changed_at:
+                type: string
+                format: date-time
+              ip_address:
+                type: string
+
+    MaliciousReportRequest:
+      description: Request schema for reporting a potentially malicious model.
+      type: object
+      required:
+        - package_id
+        - reason
+      properties:
+        package_id:
+          type: integer
+          description: ID of the suspected malicious package.
+        reason:
+          type: string
+          description: Reason for suspecting the model.
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+        evidence:
+          type: object
+          description: Additional evidence as JSON.
+
+    MaliciousModelsListResponse:
+      description: Response schema for list of suspected malicious models.
+      type: object
+      properties:
+        total:
+          type: integer
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              package_id:
+                type: integer
+              package_name:
+                type: string
+              detection_method:
+                type: string
+              severity:
+                type: string
+              status:
+                type: string
+              reason:
+                type: string
+              reported_at:
+                type: string
+                format: date-time
+
+    LLMHealthResponse:
+      description: LLM health check response.
+      type: object
+      properties:
+        status:
+          type: string
+        model:
+          type: string
+        region:
+          type: string
+        message:
+          type: string
+
+    GenerateRequest:
+      description: Request for text generation.
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          maxLength: 10000
+        system:
+          type: string
+          maxLength: 2000
+        max_tokens:
+          type: integer
+          minimum: 1
+          maximum: 4096
+        temperature:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+
+    GenerateResponse:
+      description: Response from text generation.
+      type: object
+      properties:
+        response:
+          type: string
+        model:
+          type: string
+        usage:
+          type: object
+
+    AnalyzeCodeRequest:
+      description: Request for code analysis.
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          maxLength: 50000
+        analysis_type:
+          type: string
+          enum: [reproducibility, quality, security]
+          default: reproducibility
+
+    AnalyzeCodeResponse:
+      description: Response from code analysis.
+      type: object
+      properties:
+        score:
+          type: number
+        issues:
+          type: array
+          items:
+            type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        details:
+          type: object
+
+    SummarizeRequest:
+      description: Request to summarize README content.
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          maxLength: 100000
+
+    SummarizeResponse:
+      description: Response from README summarization.
+      type: object
+      properties:
+        summary:
+          type: string
+        quality_score:
+          type: number
+        has_usage_examples:
+          type: boolean
+        has_performance_metrics:
+          type: boolean
+        has_dataset_info:
+          type: boolean
+        has_limitations:
+          type: boolean
+        missing_sections:
+          type: array
+          items:
+            type: string
